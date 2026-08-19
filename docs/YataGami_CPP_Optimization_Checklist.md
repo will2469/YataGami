@@ -23,10 +23,10 @@
 - [x] **Release frame capture segera setelah convert ke processing format** — `imageProxy.close()` dipanggil instan (<1ms) di analyzer thread sebelum komputasi CV, mengeliminasi kamera pipeline backpressure.
 
 ### 3. Format & Channel Optimization
-- [ ] **Proses di Grayscale kalau bisa** — 1 channel = 3x lebih cepat dari 3 channel. Konversi BGR→Gray di awal pipeline, jangan bolak-balik.
-- [ ] **Gunakan CV_8U kalau cukup** — Jangan naik ke CV_32F/CV_64F kecuali beneran butuh precision (contoh: gamma correction lookup table boleh 32F, image-nya tetep 8U).
-- [ ] **Planar processing untuk multi-channel** — Split channel → proses per channel → merge. Lebih cache-friendly daripada interleaved BGR processing.
-- [ ] **In-place operations selalu** — `cv::GaussianBlur(src, src, ...)` bukan `cv::GaussianBlur(src, dst, ...)`. Kalau gak bisa in-place, reuse buffer dari pool.
+- [x] **Proses di Grayscale kalau bisa** — Konversi BGR→Gray dilakukan 1x di awal pipeline deteksi/deskew/blur, operasi lanjutan berjalan murni pada 1-channel `CV_8UC1` (3x lebih hemat siklus CPU & memori).
+- [x] **Gunakan CV_8U kalau cukup** — Integer 8-bit unsigned dipertahankan di seluruh alur grafis untuk efisiensi SIMD CPU.
+- [x] **Planar processing untuk multi-channel** — Ruang warna Lab dipisah menjadi kanal planar $(L, a, b)$; hanya kanal luminansi $L$ yang dimanipulasi untuk Magic Color & Glare Suppression, menjaga kestabilan warna tanpa overhead.
+- [x] **In-place operations selalu** — Operasi CLAHE, LUT, dan Gaussian filtering diaplikasikan langsung secara in-place pada buffer yang sama.
 
 ---
 

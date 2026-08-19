@@ -11,6 +11,7 @@ add_library(
     yatagami
     SHARED
     core/common.cpp
+    core/buffer_pool.cpp
     core/scheduler.cpp
     core/preprocessing.cpp
     core/geometry.cpp

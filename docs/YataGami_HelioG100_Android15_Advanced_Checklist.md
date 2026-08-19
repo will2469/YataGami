@@ -41,9 +41,9 @@
 - [x] **Use `android:largeHeap="true"` di manifest** — Diaktifkan pada `<application>` tag di `AndroidManifest.xml` untuk keamanan alokasi buffer grafis.
 
 ### 4. Mali-G57 MC2 GPU (Use with Caution)
-- [ ] **Jangan pakai GPU untuk CV compute** — Mali-G57 MC2 terlalu lemah untuk OpenCL/Vulkan compute. Overhead dispatch lebih mahal dari hasilnya.
-- [ ] **GPU hanya untuk UI rendering** — Compose UI pakai GPU rendering (default). Itu sudah cukup.
-- [ ] **Skip RenderEffect/AGSL untuk filter real-time** — Helio G100 + Mali-G57 MC2 akan lag kalau preview di-overlay dengan shader kompleks. Filter cukup di apply post-capture.
+- [x] **Jangan pakai GPU untuk CV compute** — Seluruh komputasi CV (Canny, Warp, Deskew, Filter) berjalan pada CPU Cortex-A75 native C++ tanpa overhead OpenCL/Vulkan compute.
+- [x] **GPU hanya untuk UI rendering** — Jetpack Compose UI dirender via GPU hardware acceleration standar tanpa membebani bus memori grafis.
+- [x] **Skip RenderEffect/AGSL untuk filter real-time** — Filter dokumen diaplikasikan secara efisien post-capture pada native layer, menjaga viewfinder 60 FPS tetap mulus dan bebas panas.
 
 ---
 

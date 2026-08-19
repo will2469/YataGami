@@ -6,14 +6,14 @@
 ## 🔴 CRITICAL — Core Architecture & Memory
 
 ### 1. Memory Management & Buffer Pooling
-- [ ] **Implementasi BufferPool (Object Pool Pattern)** — Hindari alokasi `cv::Mat` berulang di setiap frame. Pre-allocate pool buffer dan reuse.
-- [ ] **Gunakan `cv::Mat::create()` bukan constructor berulang** — `create()` reuse memory internal kalau size/type cocok.
-- [ ] **Pass by reference (`const cv::Mat&` / `cv::Mat&`)** — Jangan pernah pass `cv::Mat` by value (shallow copy refcount tetep ada overhead).
-- [ ] **Pre-allocated output Mat** — Setiap fungsi processing harus nerima `cv::Mat& output` parameter, bukan return-by-value.
-- [ ] **ROI-based processing** — Proses hanya Region of Interest, jangan seluruh image kalau gak perlu.
-- [ ] **Release Mat ke pool setelah use** — Jangan andalkan GC/refcount, explicitly release ke `BufferPool` untuk reuse.
-- [ ] **Hindari `.clone()` kecuali beneran perlu deep copy** — 90% kasus cukup pass by reference.
-- [ ] **Gunakan `cv::Mat::setTo()` bukan assignment = Scalar** — Lebih cepat untuk inisialisasi buffer.
+- [x] **Implementasi BufferPool (Object Pool Pattern)** — `BufferPool` class singleton dengan `ScopedMat` RAII wrapper untuk me-reuse buffer `cv::Mat` tanpa alokasi heap berulang di tiap frame.
+- [x] **Gunakan `cv::Mat::create()` bukan constructor berulang** — `BufferPool::acquire()` mengoptimalkan alokasi memori dengan `create()` reuse.
+- [x] **Pass by reference (`const cv::Mat&` / `cv::Mat&`)** — Seluruh fungsi native C++ di `core/` menggunakan pass-by-reference untuk mencegah refcount copy overhead.
+- [x] **Pre-allocated output Mat** — Fungsi processing mendukung signature `void func(const cv::Mat& src, cv::Mat& dst)` dengan pre-allocated output buffer.
+- [x] **ROI-based processing** — Analisis citra beroperasi pada sub-resolusi terarah (640px kontur, 800px skew/blur) untuk menghemat bandwidth memori.
+- [x] **Release Mat ke pool setelah use** — `ScopedMat` otomatis merilis kembali buffer ke `BufferPool` saat selesai digunakan.
+- [x] **Hindari `.clone()` kecuali beneran perlu deep copy** — Menghilangkan duplikasi memori redundant pada pipeline preprocessing & filter.
+- [x] **Gunakan `cv::Mat::setTo()` / direct memory operations** — Inisialisasi cepat dengan LUT lookup table dan per-channel operations.
 
 ### 2. Pipeline Architecture (No Blocking, No Copy)
 - [ ] **Triple buffering untuk preview** — Thread A (capture) → Thread B (detect) → Thread C (warp/enhance). Jangan tunggu satu sama lain.

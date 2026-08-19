@@ -1,10 +1,11 @@
 #include "preprocessing.h"
+#include "buffer_pool.h"
 #include <algorithm>
 #include <cmath>
 
 namespace yatagami {
 
-cv::Mat applyDynamicGamma(const cv::Mat& gray) {
+void applyDynamicGamma(const cv::Mat& gray, cv::Mat& dst) {
     cv::Scalar meanScalar = cv::mean(gray);
     double meanVal = std::clamp(meanScalar[0], 10.0, 245.0);
 
@@ -12,7 +13,8 @@ cv::Mat applyDynamicGamma(const cv::Mat& gray) {
     gamma = std::clamp(gamma, 0.4, 2.2);
 
     if (std::abs(gamma - 1.0) < 0.05) {
-        return gray.clone();
+        if (&dst != &gray) gray.copyTo(dst);
+        return;
     }
 
     uchar lut[256];
@@ -20,49 +22,76 @@ cv::Mat applyDynamicGamma(const cv::Mat& gray) {
         lut[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, gamma) * 255.0);
     }
     cv::Mat lutMat(1, 256, CV_8U, lut);
-    cv::Mat corrected;
-    cv::LUT(gray, lutMat, corrected);
-    return corrected;
+    cv::LUT(gray, lutMat, dst);
+}
+
+cv::Mat applyDynamicGamma(const cv::Mat& gray) {
+    cv::Mat dst;
+    applyDynamicGamma(gray, dst);
+    return dst;
+}
+
+void removeShadowsGray(const cv::Mat& gray, cv::Mat& dst) {
+    ScopedMat dilated(gray.rows, gray.cols, CV_8UC1);
+    ScopedMat bg(gray.rows, gray.cols, CV_8UC1);
+    ScopedMat diff(gray.rows, gray.cols, CV_8UC1);
+
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(21, 21));
+    cv::dilate(gray, *dilated, kernel);
+    cv::medianBlur(*dilated, *bg, 21);
+
+    cv::absdiff(*bg, gray, *diff);
+    cv::subtract(cv::Scalar(255), *diff, dst);
+    cv::normalize(dst, dst, 0, 255, cv::NORM_MINMAX, CV_8UC1);
 }
 
 cv::Mat removeShadowsGray(const cv::Mat& gray) {
-    cv::Mat dilated, bg;
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(21, 21));
-    cv::dilate(gray, dilated, kernel);
-    cv::medianBlur(dilated, bg, 21);
+    cv::Mat dst;
+    removeShadowsGray(gray, dst);
+    return dst;
+}
 
-    cv::Mat diff;
-    cv::absdiff(bg, gray, diff);
-    cv::Mat normalized = 255 - diff;
-
-    cv::Mat result;
-    cv::normalize(normalized, result, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-    return result;
+void applyCLAHEGray(const cv::Mat& gray, cv::Mat& dst) {
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.5, cv::Size(8, 8));
+    clahe->apply(gray, dst);
 }
 
 cv::Mat applyCLAHEGray(const cv::Mat& gray) {
-    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.5, cv::Size(8, 8));
-    cv::Mat enhanced;
-    clahe->apply(gray, enhanced);
-    return enhanced;
+    cv::Mat dst;
+    applyCLAHEGray(gray, dst);
+    return dst;
+}
+
+void applyNoiseReduction(const cv::Mat& gray, cv::Mat& dst) {
+    cv::bilateralFilter(gray, dst, 7, 50, 50);
 }
 
 cv::Mat applyNoiseReduction(const cv::Mat& gray) {
-    cv::Mat filtered;
-    cv::bilateralFilter(gray, filtered, 7, 50, 50);
-    return filtered;
+    cv::Mat dst;
+    applyNoiseReduction(gray, dst);
+    return dst;
+}
+
+void preprocessForDetection(const cv::Mat& bgr, cv::Mat& dst) {
+    ScopedMat gray(bgr.rows, bgr.cols, CV_8UC1);
+    cv::cvtColor(bgr, *gray, cv::COLOR_BGR2GRAY);
+
+    ScopedMat gammaCorrected(bgr.rows, bgr.cols, CV_8UC1);
+    applyDynamicGamma(*gray, *gammaCorrected);
+
+    ScopedMat shadowRemoved(bgr.rows, bgr.cols, CV_8UC1);
+    removeShadowsGray(*gammaCorrected, *shadowRemoved);
+
+    ScopedMat contrastEnhanced(bgr.rows, bgr.cols, CV_8UC1);
+    applyCLAHEGray(*shadowRemoved, *contrastEnhanced);
+
+    applyNoiseReduction(*contrastEnhanced, dst);
 }
 
 cv::Mat preprocessForDetection(const cv::Mat& bgr) {
-    cv::Mat gray;
-    cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
-
-    cv::Mat gammaCorrected = applyDynamicGamma(gray);
-    cv::Mat shadowRemoved = removeShadowsGray(gammaCorrected);
-    cv::Mat contrastEnhanced = applyCLAHEGray(shadowRemoved);
-    cv::Mat denoised = applyNoiseReduction(contrastEnhanced);
-
-    return denoised;
+    cv::Mat dst;
+    preprocessForDetection(bgr, dst);
+    return dst;
 }
 
 } // namespace yatagami

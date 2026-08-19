@@ -1,5 +1,6 @@
 #include "enhancement.h"
 #include "preprocessing.h"
+#include "buffer_pool.h"
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -19,15 +20,17 @@ double calculateBlurScore(const cv::Mat& bgr) {
     cv::Mat small;
     if (std::max(gray.cols, gray.rows) > maxDim) {
         scale = maxDim / static_cast<float>(std::max(gray.cols, gray.rows));
-        cv::resize(gray, small, cv::Size(), scale, scale, cv::INTER_AREA);
+        int targetW = static_cast<int>(gray.cols * scale);
+        int targetH = static_cast<int>(gray.rows * scale);
+        cv::resize(gray, small, cv::Size(targetW, targetH), 0, 0, cv::INTER_AREA);
     } else {
         small = gray;
     }
 
-    cv::Mat lap;
-    cv::Laplacian(small, lap, CV_64F);
+    ScopedMat lap(small.rows, small.cols, CV_64F);
+    cv::Laplacian(small, *lap, CV_64F);
     cv::Scalar mean, stddev;
-    cv::meanStdDev(lap, mean, stddev);
+    cv::meanStdDev(*lap, mean, stddev);
     return stddev[0] * stddev[0];
 }
 
@@ -43,28 +46,32 @@ double calculateGlareRatio(const cv::Mat& bgr) {
     return static_cast<double>(glareCount) / static_cast<double>(gray.rows * gray.cols);
 }
 
-cv::Mat suppressGlare(const cv::Mat& bgr) {
-    cv::Mat lab;
-    cv::cvtColor(bgr, lab, cv::COLOR_BGR2Lab);
+void suppressGlare(const cv::Mat& bgr, cv::Mat& dst) {
+    ScopedMat lab(bgr.rows, bgr.cols, CV_8UC3);
+    cv::cvtColor(bgr, *lab, cv::COLOR_BGR2Lab);
     std::vector<cv::Mat> channels(3);
-    cv::split(lab, channels);
+    cv::split(*lab, channels);
 
-    cv::Mat compressed;
-    channels[0].convertTo(compressed, CV_32F);
-    compressed = cv::min(compressed, 230.0f + (compressed - 230.0f) * 0.25f);
-    compressed.convertTo(channels[0], CV_8U);
+    ScopedMat compressed(bgr.rows, bgr.cols, CV_32F);
+    channels[0].convertTo(*compressed, CV_32F);
+    *compressed = cv::min(*compressed, 230.0f + (*compressed - 230.0f) * 0.25f);
+    compressed->convertTo(channels[0], CV_8U);
 
-    cv::merge(channels, lab);
-    cv::Mat result;
-    cv::cvtColor(lab, result, cv::COLOR_Lab2BGR);
-    return result;
+    cv::merge(channels, *lab);
+    cv::cvtColor(*lab, dst, cv::COLOR_Lab2BGR);
+}
+
+cv::Mat suppressGlare(const cv::Mat& bgr) {
+    cv::Mat dst;
+    suppressGlare(bgr, dst);
+    return dst;
 }
 
 int recommendFilterMode(const cv::Mat& bgr) {
-    cv::Mat lab;
-    cv::cvtColor(bgr, lab, cv::COLOR_BGR2Lab);
+    ScopedMat lab(bgr.rows, bgr.cols, CV_8UC3);
+    cv::cvtColor(bgr, *lab, cv::COLOR_BGR2Lab);
     std::vector<cv::Mat> channels(3);
-    cv::split(lab, channels);
+    cv::split(*lab, channels);
 
     cv::Scalar meanA, stdA, meanB, stdB;
     cv::meanStdDev(channels[1], meanA, stdA);
@@ -94,57 +101,70 @@ int recommendFilterMode(const cv::Mat& bgr) {
     }
 }
 
-cv::Mat enhanceImage(const cv::Mat& srcBgr, int mode) {
+void enhanceImage(const cv::Mat& srcBgr, cv::Mat& dst, int mode) {
     cv::Mat bgr = srcBgr;
-    cv::Mat processed;
+    ScopedMat glareSuppressed(srcBgr.rows, srcBgr.cols, CV_8UC3);
 
     int effectiveMode = mode;
     if (effectiveMode == 5) { // AUTO mode
         effectiveMode = recommendFilterMode(bgr);
         if (calculateGlareRatio(bgr) > 0.05) {
-            bgr = suppressGlare(bgr);
+            suppressGlare(bgr, *glareSuppressed);
+            bgr = *glareSuppressed;
         }
     }
 
     switch (effectiveMode) {
         case 1: { // Grayscale
-            cv::cvtColor(bgr, processed, cv::COLOR_BGR2GRAY);
-            cv::cvtColor(processed, processed, cv::COLOR_GRAY2BGR);
+            ScopedMat gray(bgr.rows, bgr.cols, CV_8UC1);
+            cv::cvtColor(bgr, *gray, cv::COLOR_BGR2GRAY);
+            cv::cvtColor(*gray, dst, cv::COLOR_GRAY2BGR);
             break;
         }
         case 2: { // Black & White with background shadow removal
-            cv::Mat gray;
-            cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
-            cv::Mat cleanBg = removeShadowsGray(gray);
-            cv::Mat blurred;
-            cv::GaussianBlur(cleanBg, blurred, cv::Size(3, 3), 0);
-            cv::adaptiveThreshold(blurred, processed, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+            ScopedMat gray(bgr.rows, bgr.cols, CV_8UC1);
+            cv::cvtColor(bgr, *gray, cv::COLOR_BGR2GRAY);
+
+            ScopedMat cleanBg(bgr.rows, bgr.cols, CV_8UC1);
+            removeShadowsGray(*gray, *cleanBg);
+
+            ScopedMat blurred(bgr.rows, bgr.cols, CV_8UC1);
+            cv::GaussianBlur(*cleanBg, *blurred, cv::Size(3, 3), 0);
+
+            ScopedMat binary(bgr.rows, bgr.cols, CV_8UC1);
+            cv::adaptiveThreshold(*blurred, *binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
                                   cv::THRESH_BINARY, 15, 8);
-            cv::cvtColor(processed, processed, cv::COLOR_GRAY2BGR);
+            cv::cvtColor(*binary, dst, cv::COLOR_GRAY2BGR);
             break;
         }
         case 3: { // Magic Color (Lab + CLAHE)
-            cv::Mat lab;
-            cv::cvtColor(bgr, lab, cv::COLOR_BGR2Lab);
+            ScopedMat lab(bgr.rows, bgr.cols, CV_8UC3);
+            cv::cvtColor(bgr, *lab, cv::COLOR_BGR2Lab);
             std::vector<cv::Mat> channels(3);
-            cv::split(lab, channels);
+            cv::split(*lab, channels);
             cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
             clahe->apply(channels[0], channels[0]);
-            cv::merge(channels, lab);
-            cv::cvtColor(lab, processed, cv::COLOR_Lab2BGR);
+            cv::merge(channels, *lab);
+            cv::cvtColor(*lab, dst, cv::COLOR_Lab2BGR);
             break;
         }
         case 4: { // Sharpen (Unsharp Masking)
-            cv::Mat blurred;
-            cv::GaussianBlur(bgr, blurred, cv::Size(0, 0), 3);
-            cv::addWeighted(bgr, 1.5, blurred, -0.5, 0, processed);
+            ScopedMat blurred(bgr.rows, bgr.cols, CV_8UC3);
+            cv::GaussianBlur(bgr, *blurred, cv::Size(0, 0), 3);
+            cv::addWeighted(bgr, 1.5, *blurred, -0.5, 0, dst);
             break;
         }
         default:
-            processed = bgr.clone();
+            if (&dst != &bgr) {
+                bgr.copyTo(dst);
+            }
     }
+}
 
-    return processed;
+cv::Mat enhanceImage(const cv::Mat& bgr, int mode) {
+    cv::Mat dst;
+    enhanceImage(bgr, dst, mode);
+    return dst;
 }
 
 } // namespace yatagami

@@ -167,11 +167,24 @@ private fun analyzeFrame(
     onImageCaptured: (Bitmap) -> Unit,
     autoCaptureEnabled: Boolean
 ) {
-    val bitmap = imageProxy.toBitmap() ?: run {
-        imageProxy.close()
-        return
+    // 1. Fast frame extraction and IMMEDIATE ImageProxy release to avoid camera pipeline backpressure
+    val bitmap = try {
+        imageProxy.toBitmap().let { bmp ->
+            if (imageProxy.imageInfo.rotationDegrees != 0) {
+                com.yatagami.utils.BitmapUtils.rotateBitmap(bmp, imageProxy.imageInfo.rotationDegrees)
+            } else {
+                bmp
+            }
+        }
+    } catch (e: Exception) {
+        null
+    } finally {
+        imageProxy.close() // ALWAYS release camera hardware buffer immediately
     }
 
+    if (bitmap == null) return
+
+    // 2. Asynchronous CV Analysis pipeline on Big Cores
     CoroutineScope(Dispatchers.Default).launch {
         try {
             val cornersArray = detector.detectDocument(bitmap)
@@ -191,8 +204,6 @@ private fun analyzeFrame(
             }
         } catch (e: Exception) {
             Log.e("AnalyzeFrame", "Detection error", e)
-        } finally {
-            imageProxy.close()
         }
     }
 }

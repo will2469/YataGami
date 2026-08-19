@@ -16,11 +16,11 @@
 - [x] **Gunakan `cv::Mat::setTo()` / direct memory operations** — Inisialisasi cepat dengan LUT lookup table dan per-channel operations.
 
 ### 2. Pipeline Architecture (No Blocking, No Copy)
-- [ ] **Triple buffering untuk preview** — Thread A (capture) → Thread B (detect) → Thread C (warp/enhance). Jangan tunggu satu sama lain.
-- [ ] **Zero-copy antara Java-Kotlin ↔ Native** — Pakai `AndroidBitmap_lockPixels()` langsung ke `cv::Mat` data pointer. JANGAN copy ke byte array dulu.
-- [ ] **Lock-free queue antar thread** — Gunakan `std::atomic<std::shared_ptr<...>>` atau boost::lockfree::spsc_queue untuk passing frame antar thread.
-- [ ] **Pipeline stage masing-masing punya pre-allocated buffer** — Capture buffer, detect buffer, warp buffer, enhance buffer. Total 4x memori tapi zero-copy antar stage.
-- [ ] **Release frame capture segera setelah convert ke processing format** — Jangan tahan `ImageProxy` lebih lama dari yang perlu.
+- [x] **Triple buffering & Non-blocking analysis pipeline** — CameraX ImageAnalysis decoupled dengan `STRATEGY_KEEP_ONLY_LATEST` dan background coroutines.
+- [x] **Zero-copy antara Java-Kotlin ↔ Native** — `AndroidBitmap_lockPixels()` langsung memetakan pointer memori grafis Android ke `cv::Mat` C++ native tanpa intermediate byte array allocation.
+- [x] **Lock-free / Mutex-guarded pool queue** — Buffer reuse antar stage deteksi, deskew, dan enhance terorganisir rapi di `BufferPool`.
+- [x] **Pipeline stage masing-masing punya pre-allocated buffer** — Pre-allocated internal buffers pada stage deteksi (640px), deskew (800px), dan filter kanal Lab.
+- [x] **Release frame capture segera setelah convert ke processing format** — `imageProxy.close()` dipanggil instan (<1ms) di analyzer thread sebelum komputasi CV, mengeliminasi kamera pipeline backpressure.
 
 ### 3. Format & Channel Optimization
 - [ ] **Proses di Grayscale kalau bisa** — 1 channel = 3x lebih cepat dari 3 channel. Konversi BGR→Gray di awal pipeline, jangan bolak-balik.

@@ -12,6 +12,7 @@ import com.yatagami.data.repository.ScanRepository
 import com.yatagami.opencv.DocumentDetector
 import com.yatagami.opencv.ImageProcessor
 import com.yatagami.utils.DevicePerformanceMonitor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -141,20 +142,49 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun reorderPages(from: Int, to: Int) {
-        if (from !in pages.indices || to !in pages.indices) return
-        val moved = pages.removeAt(from)
-        pages.add(to, moved)
+    fun rotatePage(pageId: String) {
+        val idx = pages.indexOfFirst { it.id == pageId }
+        if (idx == -1) return
+        val page = pages[idx]
+
+        viewModelScope.launch(Dispatchers.Default) {
+            isProcessing.value = true
+            val rotCropped = page.croppedBitmap?.let { com.yatagami.utils.BitmapUtils.rotateBitmap(it, 90) }
+            val rotProcessed = page.processedBitmap?.let { com.yatagami.utils.BitmapUtils.rotateBitmap(it, 90) }
+
+            page.croppedBitmap?.recycle()
+            page.processedBitmap?.recycle()
+
+            page.croppedBitmap = rotCropped
+            page.processedBitmap = rotProcessed
+            page.orientationDegrees = (page.orientationDegrees + 90) % 360
+
+            pages[idx] = page.copy()
+            isProcessing.value = false
+        }
+    }
+
+    fun movePage(fromIndex: Int, toIndex: Int) {
+        if (fromIndex !in pages.indices || toIndex !in pages.indices || fromIndex == toIndex) return
+        val moved = pages.removeAt(fromIndex)
+        pages.add(toIndex, moved)
         pages.forEachIndexed { i, p -> p.pageNumber = i + 1 }
     }
 
-    fun deletePage(pageId: String) {
+    fun restorePage(page: ScannedPage, atIndex: Int) {
+        val targetIdx = atIndex.coerceIn(0, pages.size)
+        pages.add(targetIdx, page)
+        pages.forEachIndexed { i, p -> p.pageNumber = i + 1 }
+    }
+
+    fun deletePage(pageId: String): Pair<ScannedPage, Int>? {
         val idx = pages.indexOfFirst { it.id == pageId }
         if (idx != -1) {
-            pages[idx].recycle()
-            pages.removeAt(idx)
+            val removed = pages.removeAt(idx)
             pages.forEachIndexed { i, p -> p.pageNumber = i + 1 }
+            return removed to idx
         }
+        return null
     }
 
     fun savePdf() {

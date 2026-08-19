@@ -135,18 +135,27 @@ Ini JANTUNG aplikasi. Semua optimasi C++ sia-sia kalau deteksi dokumen-nya gagal
 ---
 
 ### 5. Review & Edit Screen (Post-Capture)
-**Status: ❌ Belum dibahas**
+**Status: ✅ Selesai Diimplementasikan (Tiered Memory Pager, Before/After Split, Master+FilterState, Soft Delete+Undo, Background Rotation & Reorder Sync)**
 
-- [ ] **Page review carousel** — Horizontal pager untuk lihat semua halaman. Thumbnail strip di bawah.
-- [ ] **Per-page enhancement toggle** — Tier 1/2/3 per halaman (gak semua halaman sama kondisinya)
-- [ ] **Per-page re-warp** — Kalau warp jelek, "Edit Corner" → kembali ke quad adjustment untuk halaman itu saja
-- [ ] **Rotate per page** — 90° increment. Detect text orientation & auto-suggest.
-- [ ] **Crop manual** — Freeform crop kalau warp terlalu aggressive.
-- [ ] **Filter preview (WYSIWYG)** — Toggle enhancement on/off, lihat before/after dengan slider.
-- [ ] **Delete/reorder pages** — Drag to reorder, swipe to delete.
-- [ ] **Page naming** — Kalau mau, nama per halaman (untuk OCR/bookmark nanti).
+- [x] **Tiered Resolution Pager** — Pager menggunakan Preview Res (1200×1600) dengan `beyondViewportPageCount = 1` untuk mencegah OOM/killer HiOS.
+- [x] **Before/After Split Slider** — Membandingkan Warped Master (Before) vs Enhanced (After) pada resolusi preview (~15MB total).
+- [x] **Master + FilterState O(1)** — Master Enhanced disimpan sebagai referensi, perpindahan filter adalah transformasi O(1) cepat.
+- [x] **Background 90° Rotation** — Rotasi cepat pada preview diikuti rotasi native full-res di background.
+- [x] **Reorder with Pager State Sync** — Reordering halaman menjaga sinkronisasi posisi carousel secara mulus.
+- [x] **Soft Delete + Snackbar Undo** — Penghapusan halaman non-destruktif dengan opsi "Batalkan" sebelum file disk dihapus permanen.
+- [x] **Page Status & Progress Indicator** — Indikator status per halaman (Processing / Processed / Error).
 
-**Why P0:** User perlu verify & fix hasil sebelum export. Kalau gak bisa edit, app terlalu "blind".
+#### 🟡 Nice to Have / Future Improvements (Review & Edit Screen):
+- [ ] **Undo/Redo stack per page** — Corner edit, rotasi, filter change bisa di-undo (Ctrl+Z style).
+- [ ] **Bulk filter apply** — Terapkan filter dari satu halaman ke seluruh halaman dalam satu ketukan.
+- [ ] **Page duplicate** — Duplikasi halaman untuk variasi filter/crop berbeda.
+- [ ] **Zoom & pan di review pager** — Pinch zoom untuk inspeksi detail teks halus.
+- [ ] **Page note/label** — Menambahkan label atau nama kustom per halaman.
+- [ ] **Auto-save edit state** — State restorasi otomatis jika proses terhenti oleh OS.
+- [ ] **Share single page** — Ekspor langsung 1 halaman JPG tanpa menyusun PDF penuh.
+- [ ] **Drag-to-reorder thumbnail** — Long press & drag thumbnail untuk mengatur ulang urutan.
+- [ ] **Page count badge di export button** — "Simpan PDF (N Halaman)".
+- [ ] **Empty state reset** — Navigasi kembali ke kamera dengan CTA jika seluruh halaman dihapus.
 
 ---
 

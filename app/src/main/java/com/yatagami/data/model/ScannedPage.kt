@@ -12,6 +12,14 @@ enum class DocumentType(val displayName: String) {
     FREEFORM("Kustom")
 }
 
+enum class PageStatus {
+    CAPTURED,
+    WARPED,
+    PROCESSING,
+    PROCESSED,
+    ERROR
+}
+
 data class ScannedPage(
     val id: String = UUID.randomUUID().toString(),
     val originalBitmap: Bitmap,
@@ -25,6 +33,8 @@ data class ScannedPage(
     var isManuallyAdjusted: Boolean = false,
     var autoConfidence: Float = 0.0f,
     var pageNumber: Int = 0,
+    var orientationDegrees: Int = 0,
+    var status: PageStatus = PageStatus.PROCESSED,
     var cacheFilePath: String? = null
 ) {
     val corners: FloatArray

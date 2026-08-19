@@ -24,7 +24,7 @@ class FrameAnalyzerHelper(
 
     fun analyze(
         imageProxy: ImageProxy,
-        onDocumentDetected: (List<PointF>, Boolean, Float) -> Unit,
+        onDocumentDetected: (List<PointF>, Boolean, Float, Float) -> Unit,
         autoCaptureEnabled: Boolean,
         onCountdownProgress: (Float) -> Unit,
         onTriggerCapture: () -> Unit
@@ -51,6 +51,7 @@ class FrameAnalyzerHelper(
                 val confidence = detector.calculateConfidence(
                     cornersArray, bitmap.width.toFloat(), bitmap.height.toFloat()
                 )
+                val glareRatio = detector.calculateGlareRatio(bitmap)
 
                 val rawPts = cornersArray.toList().chunked(2).map { PointF(it[0], it[1]) }
                 val isFullImageFallback = (cornersArray[0] == 0f && cornersArray[1] == 0f) || confidence < 0.35f
@@ -84,10 +85,11 @@ class FrameAnalyzerHelper(
 
                 // Multi-Factor 5-Frame Stability Check
                 val isStable = check5FrameStability(finalPts, isFullImageFallback, confidence)
-                onDocumentDetected(finalPts, isStable, confidence)
+                onDocumentDetected(finalPts, isStable, confidence, glareRatio)
 
-                // Cancelable 500ms Countdown State Machine
-                if (autoCaptureEnabled && !isFullImageFallback) {
+                // Cancelable 500ms Countdown State Machine (Hold if severe glare > 8%)
+                val hasSevereGlare = glareRatio > 0.08f
+                if (autoCaptureEnabled && !isFullImageFallback && !hasSevereGlare) {
                     when (autoCaptureState) {
                         is AutoCaptureState.Idle -> {
                             if (isStable && confidence >= 0.75f) {
@@ -127,6 +129,9 @@ class FrameAnalyzerHelper(
                         }
                     }
                 } else {
+                    if (hasSevereGlare && autoCaptureState is AutoCaptureState.CountingDown) {
+                        autoCaptureState = AutoCaptureState.Idle
+                    }
                     onCountdownProgress(0f)
                 }
             } catch (e: Exception) {

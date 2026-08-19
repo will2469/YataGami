@@ -10,6 +10,22 @@ void applyClaheToL(cv::Mat& labL, double clipLimit, cv::Size tileSize) {
     clahe->apply(labL, labL);
 }
 
+void applySpecularGlareSuppression(cv::Mat& lChannel) {
+    alignas(64) uchar lut[256];
+    for (int i = 0; i < 256; ++i) {
+        if (i < 235) {
+            lut[i] = static_cast<uchar>(i);
+        } else {
+            // Smooth soft-knee compression: maps [235, 255] down to [235, 244]
+            double diff = static_cast<double>(i - 235);
+            double compressed = 235.0 + 9.0 * std::tanh(diff / 10.0);
+            lut[i] = cv::saturate_cast<uchar>(compressed);
+        }
+    }
+    cv::Mat lutMat(1, 256, CV_8U, lut);
+    cv::LUT(lChannel, lutMat, lChannel);
+}
+
 void fastEdgePreservingFilter(const cv::Mat& src, cv::Mat& dst, int radius, float threshold) {
     ScopedMat blurred(src.rows, src.cols, src.type());
     cv::boxFilter(src, *blurred, -1, cv::Size(radius * 2 + 1, radius * 2 + 1));
@@ -84,6 +100,7 @@ void enhanceTier1Fast(const cv::Mat& src, cv::Mat& dst) {
     cv::Mat lutMat(1, 256, CV_8U, lut);
     cv::LUT(channels[0], lutMat, channels[0]);
 
+    applySpecularGlareSuppression(channels[0]);
     applyClaheToL(channels[0], 2.0, cv::Size(8, 8));
 
     cv::merge(channels, *lab);
@@ -97,10 +114,8 @@ void enhanceTier2Standard(const cv::Mat& src, cv::Mat& dst) {
     std::vector<cv::Mat> channels(3);
     cv::split(*lab, channels);
 
-    // 1. Specular Glare clamp on L channel
-    ScopedMat glareMask(channels[0].rows, channels[0].cols, CV_8UC1);
-    cv::threshold(channels[0], *glareMask, 245, 255, cv::THRESH_BINARY);
-    channels[0].setTo(242, *glareMask);
+    // 1. Specular Glare soft-knee compression on L channel
+    applySpecularGlareSuppression(channels[0]);
 
     // 2. True Auto White Point
     ScopedMat brightMask(channels[0].rows, channels[0].cols, CV_8UC1);
@@ -166,9 +181,10 @@ void enhanceTier3Quality(const cv::Mat& src, cv::Mat& dst) {
     ScopedMat denoised(src.rows, src.cols, CV_8UC3);
     cv::bilateralFilter(*shadowCorrected, *denoised, 9, 75, 75);
 
-    // STEP 4: CLAHE in LAB L channel
+    // STEP 4: Glare Suppression & CLAHE in LAB L channel
     cv::cvtColor(*denoised, *lab, cv::COLOR_BGR2Lab);
     cv::split(*lab, channels);
+    applySpecularGlareSuppression(channels[0]);
     applyClaheToL(channels[0], 4.0, cv::Size(8, 8));
     cv::merge(channels, *lab);
     ScopedMat clahed(src.rows, src.cols, CV_8UC3);

@@ -35,7 +35,12 @@ class DocumentDetector {
         return nativeCalculateConfidence(corners, width, height)
     }
 
+    fun calculateGlareRatio(bitmap: Bitmap): Float {
+        return nativeCalculateGlareRatio(bitmap)
+    }
+
     private external fun nativeDetectDocument(bitmap: Bitmap): FloatArray
     private external fun nativeDetectDocumentDirect(bitmap: Bitmap, directBuffer: ByteBuffer): Boolean
     private external fun nativeCalculateConfidence(corners: FloatArray, width: Float, height: Float): Float
+    private external fun nativeCalculateGlareRatio(bitmap: Bitmap): Float
 }

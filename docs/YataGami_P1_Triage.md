@@ -92,9 +92,9 @@ graph TD
 > **Target:** Menjamin ketahanan dan kecerdasan aplikasi dalam kondisi pemindaian fisik yang menantang di dunia nyata serta melindungi privasi pengguna di Android 15.
 
 ### 📦 Deliverables & Detail Teknis:
-1. **Specular Glare Detection & Suppression**
+1. [x] **Specular Glare Detection & Suppression**
    - Deteksi kilau lampu pada permukaan glossy (KTP laminating, foto) via rasio piksel jenuh $\ge 248$ (`calculateGlareRatio`).
-   - Tampilan visual warning *"Kilau cahaya terdeteksi, miringkan sedikit HP"* dan auto-kompresi highlight pada kanal L (Lab).
+   - Tampilan visual warning *"Kilau cahaya terdeteksi, miringkan sedikit HP"*, penahanan auto-capture saat glare parah ($>8\%$), dan auto-kompresi highlight soft-knee L1 LUT pada kanal L (Lab).
 2. **Low-Light Assistant & Auto Torch (Lux < 50)**
    - Sensor cahaya mendeteksi lux $< 50$: otomatis menampilkan saran / menyalakan senter dual-LED Tecno Pova 7 serta mengaktifkan hardware Multi-Frame Noise Reduction (MFNR) Helio G100.
 3. **Real-time Blur & Motion Guard (Laplacian Variance)**

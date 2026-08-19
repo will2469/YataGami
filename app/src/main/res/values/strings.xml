@@ -69,4 +69,7 @@
     <string name="action_rename_confirm">Simpan</string>
     <string name="action_cancel">Batal</string>
     <string name="action_duplicating">Menduplikasi dokumen…</string>
+
+    <!-- Camera Safety & Quality Warnings -->
+    <string name="warning_glare_detected">Kilau cahaya terdeteksi, miringkan sedikit HP</string>
 </resources>

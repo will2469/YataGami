@@ -55,7 +55,7 @@ sealed class AutoCaptureState {
 @Composable
 fun CameraPreview(
     onImageCaptured: (Bitmap) -> Unit,
-    onDocumentDetected: (List<PointF>, Boolean, Float) -> Unit,
+    onDocumentDetected: (List<PointF>, Boolean, Float, Float) -> Unit,
     autoCaptureEnabled: Boolean = true,
     torchMode: TorchMode = TorchMode.OFF,
     onCountdownProgress: (Float) -> Unit = {},
@@ -78,52 +78,52 @@ fun CameraPreview(
         val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
-                if (event != null && event.values.size >= 2) {
-                    val ax = event.values[0]
-                    val ay = event.values[1]
-                    val level = abs(ax) < 1.8f && abs(ay) < 2.5f
-                    if (level != isPhoneLevel) {
-                        isPhoneLevel = level
-                        onDeviceLevelChange(level)
-                    }
+                if (event == null) return
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+
+                // Device is roughly flat / parallel to document if gravity is mostly along Z axis
+                val isFlat = abs(z) > 8.0f && abs(x) < 2.5f && abs(y) < 2.5f
+                if (isFlat != isPhoneLevel) {
+                    isPhoneLevel = isFlat
+                    onDeviceLevelChange(isFlat)
                 }
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
-        sensorManager?.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
+        sensorManager?.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
         onDispose {
             sensorManager?.unregisterListener(listener)
+            executor.shutdown()
         }
     }
 
-    // Torch Mode Control
+    // Torch state handler
     LaunchedEffect(torchMode, currentCamera) {
-        currentCamera?.let { cam ->
-            when (torchMode) {
-                TorchMode.ON -> cam.cameraControl.enableTorch(true)
-                TorchMode.OFF -> cam.cameraControl.enableTorch(false)
-                TorchMode.AUTO -> { /* Auto torch handled on demand */ }
-            }
-        }
+        currentCamera?.cameraControl?.enableTorch(torchMode == TorchMode.ON)
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
-            factory = {
-                val previewView = PreviewView(context).apply {
+            factory = { ctx ->
+                val previewView = PreviewView(ctx).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                    implementationMode = PreviewView.ImplementationMode.PERFORMANCE
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
                 }
 
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
                     val provider = cameraProviderFuture.get()
 
                     // Stream 1: 30 FPS 720p Preview
                     val preview = CameraStreamManager.buildPreview(previewView)
+
+                    // Stream 3: 12MP 4000x3000 ImageCapture
+                    val imageCapture = CameraStreamManager.buildImageCapture()
 
                     // Stream 2: 10-15 FPS 720p ImageAnalysis
                     val imageAnalysis = CameraStreamManager.buildImageAnalysis().also {
@@ -135,13 +135,11 @@ fun CameraPreview(
                                 onCountdownProgress = onCountdownProgress,
                                 onTriggerCapture = {
                                     CameraFeedbackHelper.triggerCaptureFeedback(context) { isCapturingFlash = it }
+                                    CameraFeedbackHelper.takePictureDirect(imageCapture, executor, onImageCaptured)
                                 }
                             )
                         }
                     }
-
-                    // Stream 3: 12MP 4000x3000 ImageCapture
-                    val imageCapture = CameraStreamManager.buildImageCapture()
 
                     try {
                         provider.unbindAll()

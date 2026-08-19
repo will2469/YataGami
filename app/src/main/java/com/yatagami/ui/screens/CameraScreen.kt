@@ -28,6 +28,7 @@ fun CameraScreen(navController: NavController, viewModel: ScanViewModel) {
     var detectedCorners by remember { mutableStateOf(listOf<PointF>()) }
     var isDocumentStable by remember { mutableStateOf(false) }
     var detectionConfidence by remember { mutableFloatStateOf(0f) }
+    var detectionGlareRatio by remember { mutableFloatStateOf(0f) }
     var countdownProgress by remember { mutableFloatStateOf(0f) }
     var isPhoneLevel by remember { mutableStateOf(true) }
 
@@ -49,10 +50,11 @@ fun CameraScreen(navController: NavController, viewModel: ScanViewModel) {
                     onImageCaptured = { bitmap ->
                         viewModel.addPage(bitmap)
                     },
-                    onDocumentDetected = { corners, stable, conf ->
+                    onDocumentDetected = { corners, stable, conf, glare ->
                         detectedCorners = corners
                         isDocumentStable = stable
                         detectionConfidence = conf
+                        detectionGlareRatio = glare
                     },
                     autoCaptureEnabled = autoCaptureEnabled,
                     torchMode = torchMode,
@@ -67,11 +69,12 @@ fun CameraScreen(navController: NavController, viewModel: ScanViewModel) {
                     }
                 )
 
-                // 2. Real-time Neon Contour & Guide Overlay
+                // 2. Real-time Neon Contour & Guide Overlay with Glare Guard
                 DocumentOverlay(
                     corners = detectedCorners,
                     isStable = isDocumentStable,
                     confidence = detectionConfidence,
+                    glareRatio = detectionGlareRatio,
                     showAlignmentGuide = showAlignmentGuide,
                     isLevel = isPhoneLevel
                 )

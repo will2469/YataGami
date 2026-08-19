@@ -1,14 +1,24 @@
 package com.yatagami.ui.components
 
 import android.graphics.PointF
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,7 +26,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.yatagami.R
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -26,6 +40,7 @@ fun DocumentOverlay(
     corners: List<PointF>,
     isStable: Boolean = false,
     confidence: Float = 0f,
+    glareRatio: Float = 0f,
     showAlignmentGuide: Boolean = true,
     isLevel: Boolean = true,
     modifier: Modifier = Modifier
@@ -140,6 +155,37 @@ fun DocumentOverlay(
                     .align(Alignment.TopCenter)
                     .padding(top = 72.dp)
             )
+        }
+
+        // 5. Specular Glare Warning Banner (Animated Warning Pill)
+        AnimatedVisibility(
+            visible = glareRatio > 0.05f,
+            enter = fadeIn() + slideInVertically { -it },
+            exit = fadeOut() + slideOutVertically { -it },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 104.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .background(Color(0xCC1E1E1E), shape = RoundedCornerShape(20.dp))
+                    .border(1.dp, Color(0xFFFFB300), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color(0xFFFFB300),
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+                Text(
+                    text = stringResource(R.string.warning_glare_detected),
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }

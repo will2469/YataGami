@@ -3,6 +3,7 @@
 #include "core/scheduler.h"
 #include "core/preprocessing.h"
 #include "core/geometry.h"
+#include "core/scene_analysis.h"
 
 extern "C" {
 
@@ -69,12 +70,23 @@ Java_com_yatagami_opencv_DocumentDetector_nativeCalculateConfidence(
     return yatagami::calculateQuadConfidence(docCorners, imgWidth, imgHeight);
 }
 
+JNIEXPORT jfloat JNICALL
+Java_com_yatagami_opencv_DocumentDetector_nativeCalculateGlareRatio(
+        JNIEnv *env, jobject, jobject bitmap) {
+    cv::Mat img;
+    if (!yatagami::bitmapToMat(env, bitmap, img)) {
+        return 0.0f;
+    }
+    return static_cast<jfloat>(yatagami::calculateGlareRatio(img));
+}
+
 } // extern "C"
 
 static const JNINativeMethod gDocumentDetectorMethods[] = {
     {"nativeDetectDocument", "(Landroid/graphics/Bitmap;)[F", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocument},
     {"nativeDetectDocumentDirect", "(Landroid/graphics/Bitmap;Ljava/nio/ByteBuffer;)Z", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocumentDirect},
-    {"nativeCalculateConfidence", "([FFF)F", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeCalculateConfidence}
+    {"nativeCalculateConfidence", "([FFF)F", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeCalculateConfidence},
+    {"nativeCalculateGlareRatio", "(Landroid/graphics/Bitmap;)F", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeCalculateGlareRatio}
 };
 
 namespace yatagami {

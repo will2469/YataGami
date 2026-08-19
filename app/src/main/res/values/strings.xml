@@ -30,4 +30,43 @@
     <string name="export_no_pages_selected">Pilih minimal 1 halaman untuk diekspor</string>
     <string name="export_share_chooser_title">Bagikan Dokumen YataGami</string>
     <string name="export_share_no_app">Tidak ada aplikasi yang dapat membuka berkas ini</string>
+
+    <!-- Document Library UI Strings -->
+    <string name="library_title">Dokumen Saya</string>
+    <string name="library_search_placeholder">Cari nama dokumen atau tanggal…</string>
+    <string name="library_empty_title">Belum ada dokumen</string>
+    <string name="library_empty_desc">Pindai dokumen pertama Anda atau impor foto dari galeri untuk memulai.</string>
+    <string name="library_scan_cta">Pindai Dokumen</string>
+    <string name="library_import_gallery">Impor Foto</string>
+    <string name="library_item_count">%1$d dokumen</string>
+    <string name="library_pages_badge">%1$d Hal</string>
+
+    <!-- Date Categories -->
+    <string name="category_today">Hari Ini</string>
+    <string name="category_yesterday">Kemarin</string>
+    <string name="category_this_week">Minggu Ini</string>
+    <string name="category_this_month">Bulan Ini</string>
+    <string name="category_older">Lebih Lama</string>
+
+    <!-- Tags -->
+    <string name="tag_all">Semua</string>
+    <string name="tag_ktp">KTP / ID</string>
+    <string name="tag_a4">A4</string>
+    <string name="tag_f4">F4 / Folio</string>
+    <string name="tag_receipt">Struk</string>
+    <string name="tag_book">Buku</string>
+    <string name="tag_general">Dokumen</string>
+
+    <!-- Document Context Actions -->
+    <string name="action_share">Bagikan Dokumen</string>
+    <string name="action_rename">Ubah Nama</string>
+    <string name="action_duplicate">Duplikasi Dokumen</string>
+    <string name="action_export_images">Simpan Semua Halaman ke Galeri</string>
+    <string name="action_delete">Hapus Dokumen</string>
+    <string name="action_undo">BATALKAN</string>
+    <string name="action_delete_success">Dokumen dihapus</string>
+    <string name="action_rename_title">Ubah Nama Dokumen</string>
+    <string name="action_rename_confirm">Simpan</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_duplicating">Menduplikasi dokumen…</string>
 </resources>

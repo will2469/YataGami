@@ -16,14 +16,17 @@ import androidx.navigation.navArgument
 import com.yatagami.ui.screens.CameraScreen
 import com.yatagami.ui.screens.CropScreen
 import com.yatagami.ui.screens.FilterScreen
+import com.yatagami.ui.screens.LibraryScreen
 import com.yatagami.ui.screens.PageListScreen
+import com.yatagami.ui.viewmodel.LibraryViewModel
 import com.yatagami.ui.viewmodel.ScanViewModel
 
 @Composable
 fun AppNavigation(
-    viewModel: ScanViewModel,
+    scanViewModel: ScanViewModel,
+    libraryViewModel: LibraryViewModel,
     navController: NavHostController = rememberNavController(),
-    startDestination: String = "camera"
+    startDestination: String = "library"
 ) {
     NavHost(
         navController = navController,
@@ -31,13 +34,23 @@ fun AppNavigation(
         modifier = Modifier.fillMaxSize()
     ) {
         composable(
+            route = "library",
+            enterTransition = { fadeIn(animationSpec = tween(300)) },
+            exitTransition = { fadeOut(animationSpec = tween(300)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(300)) },
+            popExitTransition = { fadeOut(animationSpec = tween(300)) }
+        ) {
+            LibraryScreen(navController, libraryViewModel, scanViewModel)
+        }
+
+        composable(
             route = "camera",
             enterTransition = { fadeIn(animationSpec = tween(300)) },
             exitTransition = { fadeOut(animationSpec = tween(300)) },
             popEnterTransition = { fadeIn(animationSpec = tween(300)) },
             popExitTransition = { fadeOut(animationSpec = tween(300)) }
         ) {
-            CameraScreen(navController, viewModel)
+            CameraScreen(navController, scanViewModel)
         }
 
         composable(
@@ -67,7 +80,7 @@ fun AppNavigation(
                 )
             }
         ) {
-            PageListScreen(navController, viewModel)
+            PageListScreen(navController, scanViewModel)
         }
 
         composable(
@@ -99,7 +112,7 @@ fun AppNavigation(
             }
         ) { backStackEntry ->
             val pageId = backStackEntry.arguments?.getString("pageId") ?: ""
-            CropScreen(pageId, navController, viewModel)
+            CropScreen(pageId, navController, scanViewModel)
         }
 
         composable(
@@ -131,7 +144,7 @@ fun AppNavigation(
             }
         ) { backStackEntry ->
             val pageId = backStackEntry.arguments?.getString("pageId") ?: ""
-            FilterScreen(pageId, navController, viewModel)
+            FilterScreen(pageId, navController, scanViewModel)
         }
     }
 }

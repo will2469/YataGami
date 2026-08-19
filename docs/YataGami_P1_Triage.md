@@ -62,30 +62,29 @@ graph TD
 > **Target:** Membangun *Home Base* aplikasi untuk mengelola seluruh dokumen yang telah dipindai, menelusuri riwayat, mengimpor dokumen eksternal, dan menerima file dari aplikasi lain.
 
 ### 📦 Deliverables & Detail Teknis:
-1. **Modern Document Library UI (Jetpack Compose Edge-to-Edge)**
+1. [x] **Modern Document Library UI (Jetpack Compose Edge-to-Edge)**
    - Tampilan daftar dokumen elegan (LazyColumn / Grid Switcher) dengan cover thumbnail, nama file, tanggal scan, jumlah halaman, dan ukuran file.
-2. **Disk-Backed Thumbnail Cache (200×200 px)**
-   - Caching thumbnail ringan di `context.cacheDir/thumbnails/` (menggunakan Coil / disk cache) agar perpustakaan termuat secepat kilat (<10ms) tanpa me-render PDF penuh.
-3. **Smart Date Grouping & Categorization Tags**
-   - Pengelompokan cerdas berdasarkan waktu: *Hari Ini*, *Kemarin*, *Minggu Ini*, *Bulan Ini*.
-   - Filter cepat berdasarkan tag tipe dokumen (*KTP*, *Invoice*, *Struk*, *Dokumen*, *Foto*).
-4. **Instant Offline Prefix & Substring Search**
-   - Kolom pencarian cepat berbasis nama dokumen, tanggal, atau tag secara 100% *offline*.
-5. **Quick Action Context Menu & Bottom Sheet**
+2. [x] **Disk-Backed Thumbnail Cache (200×200 px)**
+   - Caching thumbnail ringan di `context.cacheDir/thumbnails/` dengan cache-busting timestamp `{docId}_{updatedAt}.jpg` dan LRU in-memory cache (<5ms).
+3. [x] **Smart Date Grouping & Categorization Tags**
+   - Pengelompokan cerdas berdasarkan waktu: *Hari Ini*, *Kemarin*, *Minggu Ini*, *Bulan Ini*, *Lebih Lama*.
+   - Filter cepat berdasarkan tag tipe dokumen (*KTP*, *A4*, *F4*, *Struk*, *Foto*).
+4. [x] **Instant Offline Prefix & Substring Search**
+   - Kolom pencarian cepat berbasis nama dokumen atau tanggal secara 100% *offline* dengan debouncing 200ms reaktif.
+5. [x] **Quick Action Context Menu & Bottom Sheet**
    - Menu aksi per kartu dokumen:
      - 📤 *Share* (Buka Android Sharesheet)
      - ✏️ *Rename* (Ubah nama file instan)
-     - 📋 *Duplicate* (Duplikasi dokumen)
-     - 🖼️ *Export as Images* (Ekstrak semua halaman ke JPG/PNG)
-     - 🗑️ *Delete* (Soft delete dengan opsi Undo / Pindah ke Sampah)
-6. **Friendly Empty State & First-Scan CTA**
-   - Desain ilustrasi modern saat perpustakaan kosong dengan tombol ajakan *"Mulai Pindai Dokumen Pertama"*.
-7. **Android 15 Photo Picker Integration (`PickVisualMedia`)**
-   - Mengimpor foto dokumen dari Galeri tanpa memerlukan izin storage (`READ_MEDIA_IMAGES`), langsung masuk ke alur auto-crop YataGami.
-8. **Share Target Integration (`ACTION_SEND` receiver)**
-   - Menerima share gambar atau PDF dari aplikasi lain (WhatsApp, File Manager, Telegram) langsung ke YataGami untuk di-enhance atau digabungkan.
-9. **Quick Re-Scan Flow**
-   - Tombol cepat "Pindai Lagi" untuk langsung kembali ke viewfinder kamera tanpa memuat ulang activity.
+     - 📋 *Duplicate* (Duplikasi dokumen dengan progress state)
+     - 🗑️ *Delete* (Soft delete dengan opsi Undo Snackbar & delayed physical purge)
+6. [x] **Friendly Empty State & First-Scan CTA**
+   - Desain ilustrasi modern saat perpustakaan kosong dengan tombol ajakan *"Mulai Pindai Dokumen"*.
+7. [x] **Android 15 Photo Picker Integration (`PickVisualMedia`)**
+   - Mengimpor foto dokumen dari Galeri tanpa memerlukan izin storage (`READ_MEDIA_IMAGES`), dibatasi aman hingga 20 foto, langsung masuk ke alur auto-crop YataGami.
+8. [x] **Share Target Integration (`ACTION_SEND` receiver)**
+   - Menerima share gambar atau PDF dari aplikasi lain (WhatsApp, File Manager, Telegram) langsung ke YataGami dengan `category.DEFAULT`, `launchMode="singleTask"`, dan penyalinan byte langsung ke cache.
+9. [x] **Quick Re-Scan Flow**
+   - Tombol FAB "Pindai" untuk langsung membuka viewfinder kamera dari Library Screen.
 
 ---
 

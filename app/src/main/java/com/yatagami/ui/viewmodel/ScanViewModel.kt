@@ -1,31 +1,44 @@
 package com.yatagami.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.ParcelFileDescriptor
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.yatagami.data.model.DocumentType
 import com.yatagami.data.model.FilterMode
 import com.yatagami.data.model.ImageExportFormat
+import com.yatagami.data.model.LibraryDocument
 import com.yatagami.data.model.PdfCompressionTier
 import com.yatagami.data.model.ScannedPage
 import com.yatagami.data.model.SharePayload
+import com.yatagami.data.repository.DocumentLibraryRepository
 import com.yatagami.data.repository.ScanRepository
 import com.yatagami.data.session.DocumentSession
 import com.yatagami.data.session.DocumentSessionManager
 import com.yatagami.opencv.DocumentDetector
 import com.yatagami.opencv.ImageProcessor
 import com.yatagami.utils.DevicePerformanceMonitor
+import com.yatagami.utils.ThumbnailManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
 
 class ScanViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ScanRepository(application)
     private val sessionManager = DocumentSessionManager.getInstance(application)
+    private val libraryRepo = DocumentLibraryRepository.getInstance(application)
     private val detector = DocumentDetector()
     private val processor = ImageProcessor()
 
@@ -137,6 +150,63 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
 
             isProcessing.value = false
             _events.emit(ScanEvent.PageAdded(page.id))
+        }
+    }
+
+    fun importImagesFromUris(context: Context, uris: List<Uri>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            isProcessing.value = true
+            for (uri in uris) {
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        val bmp = BitmapFactory.decodeStream(stream)
+                        if (bmp != null) {
+                            withContext(Dispatchers.Main) {
+                                addPage(bmp)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            isProcessing.value = false
+        }
+    }
+
+    fun importPdfFromUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            isProcessing.value = true
+            try {
+                val tempFile = File(context.cacheDir, "temp_import_${System.currentTimeMillis()}.pdf")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                val renderer = android.graphics.pdf.PdfRenderer(pfd)
+                val pageCount = renderer.pageCount
+                for (i in 0 until pageCount) {
+                    val page = renderer.openPage(i)
+                    val w = page.width * 2
+                    val h = page.height * 2
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    page.close()
+                    withContext(Dispatchers.Main) {
+                        addPage(bmp)
+                    }
+                }
+                renderer.close()
+                pfd.close()
+                tempFile.delete()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _events.emit(ScanEvent.Error("Gagal mengimpor PDF: ${e.localizedMessage}"))
+            } finally {
+                isProcessing.value = false
+            }
         }
     }
 
@@ -289,9 +359,36 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             isProcessing.value = false
 
             if (result.isSuccess) {
+                val pdfPath = result.getOrThrow()
+                val docId = UUID.randomUUID().toString()
+                val now = System.currentTimeMillis()
+                val firstPage = targetPages.firstOrNull()
+                val thumbPath = if (firstPage != null) {
+                    ThumbnailManager.createAndSaveThumbnail(
+                        getApplication(),
+                        docId,
+                        firstPage.getDisplayBitmap(),
+                        now
+                    )
+                } else ""
+
+                val doc = LibraryDocument(
+                    id = docId,
+                    title = titleToUse,
+                    createdAt = now,
+                    updatedAt = now,
+                    pageCount = targetPages.size,
+                    fileSizeBytes = 0L,
+                    primaryDocType = firstPage?.docType ?: DocumentType.A4,
+                    pdfPath = pdfPath,
+                    thumbnailPath = thumbPath
+                )
+                val sessionPages = targetPages.map { sessionManager.persistPageBitmaps(currentSession.sessionId, it) }
+                libraryRepo.saveDocument(doc, sessionPages)
+
                 sessionManager.clearSession(currentSession.sessionId)
                 currentSession = sessionManager.createNewSession()
-                _events.emit(ScanEvent.PdfSaved(result.getOrThrow()))
+                _events.emit(ScanEvent.PdfSaved(pdfPath))
             } else {
                 _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyimpan PDF"))
             }
@@ -404,6 +501,12 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyiapkan gambar"))
             }
         }
+    }
+
+    fun clearPages() {
+        pages.forEach { it.recycle() }
+        pages.clear()
+        currentSession = sessionManager.createNewSession()
     }
 
     override fun onCleared() {

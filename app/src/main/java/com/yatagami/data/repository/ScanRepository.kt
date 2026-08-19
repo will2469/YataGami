@@ -125,6 +125,10 @@ class ScanRepository(private val context: Context) {
                     val y = (heightPt - drawHeight) / 2f
                     stream.drawImage(pdImage, x, y, drawWidth, drawHeight)
                 }
+
+                if (com.yatagami.utils.DevicePerformanceMonitor.isUnderMemoryPressure()) {
+                    System.gc()
+                }
             }
 
             val safeTitle = title.replace(Regex("[^a-zA-Z0-9\\\\u0000-.]"), "_")

@@ -11,6 +11,7 @@ add_library(
     yatagami
     SHARED
     core/common.cpp
+    core/scheduler.cpp
     core/preprocessing.cpp
     core/geometry.cpp
     core/deskew.cpp

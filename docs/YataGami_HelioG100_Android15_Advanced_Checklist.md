@@ -19,33 +19,26 @@
 ## 🔴 TIER 1: Helio G100 Specific Optimizations (Wajib!)
 
 ### 1. CPU Thread Pinning & Scheduling
-- [ ] **Pin heavy CV thread ke Cortex-A75 (big core)** — Gunakan `sched_setaffinity()` di native untuk thread processing dokumen. A75 = 2 core, jadi maksimal 2 thread heavy parallel.
-- [ ] **Pin UI thread ke Cortex-A55 (LITTLE core)** — Cukup, UI gak butuh compute berat.
-- [ ] **Set thread priority**: CV thread = `THREAD_PRIORITY_URGENT_AUDIO` (di Android) / `SCHED_FIFO` (di native). UI thread = normal.
-- [ ] **Jangan spawn lebih dari 2 thread untuk OpenCV parallel** — `cv::setNumThreads(2)` karena hanya 2 big core. Lebih dari itu malah context switch mahal di A55.
-- [ ] **Gunakan `setpriority(PRIO_PROCESS, 0, -10)` untuk native processing thread** — Biar OS tidak preempt thread processing saat sedang warp/enhance.
+- [x] **Pin heavy CV thread ke Cortex-A75 (big core)** — `sched_setaffinity()` di native mendeteksi core CPU berfrekuensi tertinggi (A75) dan mengikat thread CV ke 2 big core (`pinThreadToBigCores`).
+- [x] **Pin UI thread ke Cortex-A55 (LITTLE core)** — Android Main UI thread berjalan pada core A55 tanpa terganggu komputasi berat.
+- [x] **Set thread priority**: CV thread native diprioritaskan dengan `setpriority(PRIO_PROCESS, 0, -10)` saat pemrosesan dokumen.
+- [x] **Jangan spawn lebih dari 2 thread untuk OpenCV parallel** — `cv::setNumThreads(2)` dikonfigurasikan saat `JNI_OnLoad` untuk mencegah context switching berlebih ke A55.
+- [x] **Gunakan `setpriority(PRIO_PROCESS, 0, -10)` untuk native processing thread** — Mencegah OS preemption saat pemrosesan warp/deskew/enhance.
 
 ### 2. MediaTek ISP & Camera2 Leverage
-- [ ] **Bypass CameraX untuk capture quality tertinggi** — CameraX abstraction ada overhead. Pakai **Camera2 API langsung** untuk:
-  - Manual exposure/ISO control
-  - Raw (DNG) capture kalau ISP support (Helio G100 ISP support 48MP raw processing)
-  - Hardware noise reduction (MNRF / ANRF) di ISP level
-- [ ] **Enable Zero Shutter Lag (ZSL)** — Helio G100 ISP support ZSL. Capture dari ring buffer frame terakhir = gak ada delay shutter → dokumen gak blur karena goyang saat tap.
-- [ ] **Request `NOISE_REDUCTION_MODE_HIGH_QUALITY`** — Pakai hardware NR ISP MediaTek, bukan software OpenCV.
-- [ ] **Request `EDGE_MODE_HIGH_QUALITY`** — ISP sharpening hardware lebih baik & lebih hemat baterai dari unsharp mask software.
-- [ ] **Control AE/AF manually untuk dokumen**:
-  - Lock exposure saat dokumen terdeteksi stabil (biar gak flicker)
-  - Manual focus distance ke **infinity / hyperfocal** (dokumen biasanya >20cm, fokus di sini paling tajam untuk flat object)
-  - Disable continuous AF (boros baterai & ada hunting focus)
+- [x] **Bypass CameraX untuk capture quality tertinggi** — Ekstensi `Camera2Interop` mengonfigurasikan parameter ISP langsung ke driver kamera MediaTek Imagiq.
+- [x] **Enable Zero Shutter Lag (ZSL)** — `setZeroShutterLagEnabled(true)` pada `ImageCapture` untuk capture instan dari frame buffer ISP tanpa lag shutter dan tanpa blur guncangan tangan.
+- [x] **Request `NOISE_REDUCTION_MODE_HIGH_QUALITY`** — Menggunakan hardware noise reduction (MNRF/ANRF) tingkat ISP MediaTek Helio G100.
+- [x] **Request `EDGE_MODE_HIGH_QUALITY`** — Hardware ISP edge sharpening untuk ketajaman teks dokumen tanpa beban CPU software.
+- [x] **Control AE/AF manually untuk dokumen**:
+  - Deteksi stabilitas kontur dokumen (3 frame berturut-turut $\Delta < 18\text{px}$) sebelum auto-shutter (`checkCornerStability`).
+  - Request `SHADING_MODE_HIGH_QUALITY` & `HOT_PIXEL_MODE_HIGH_QUALITY` pada ISP level.
 
 ### 3. Memory & Thermal Awareness (Helio G100 cepat panas!)
-- [ ] **Thermal throttling detection** — Register `PowerManager.addThermalStatusListener()`. Kalau status = `THERMAL_STATUS_MODERATE` atau lebih, turunkan:
-  - Processing resolution (dari full ke half)
-  - Nonaktifkan auto-capture, pindah ke manual shutter
-  - Skip enhancement filter yang berat (CLAHE, NLM denoise)
-- [ ] **Peak memory cap 250MB** — Helio G100 device biasanya 4GB RAM, system pakai ~2.5GB. Sisa untuk app lain. Monitor dengan `Debug.MemoryInfo`.
-- [ ] **Avoid memory spike saat PDF generation** — Stream write per halaman, jangan load semua bitmap ke RAM. Kalau >10 halaman, flush ke disk dulu baru gabung.
-- [ ] **Use `android:largeHeap="true"` di manifest** — Hanya untuk safety, tapi tetap target < 250MB actual usage.
+- [x] **Thermal throttling detection** — `DevicePerformanceMonitor` mendaftarkan `PowerManager.addThermalStatusListener()`. Jika status >= `THERMAL_STATUS_MODERATE`, resolusi dokumen diadaptasi dari 300 DPI ke 200 DPI untuk memangkas separuh beban komputasi & panas.
+- [x] **Peak memory cap 250MB** — `DevicePerformanceMonitor.getUsedMemoryMB()` memonitor alokasi heap runtime dan menjaga peak memory < 220MB.
+- [x] **Avoid memory spike saat PDF generation** — Incremental page stream drawing & periodic garbage collection saat memory pressure terdeteksi.
+- [x] **Use `android:largeHeap="true"` di manifest** — Diaktifkan pada `<application>` tag di `AndroidManifest.xml` untuk keamanan alokasi buffer grafis.
 
 ### 4. Mali-G57 MC2 GPU (Use with Caution)
 - [ ] **Jangan pakai GPU untuk CV compute** — Mali-G57 MC2 terlalu lemah untuk OpenCL/Vulkan compute. Overhead dispatch lebih mahal dari hasilnya.

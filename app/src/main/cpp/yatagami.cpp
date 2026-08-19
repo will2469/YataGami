@@ -1,14 +1,22 @@
 #include "core/common.h"
+#include "core/scheduler.h"
 #include "core/preprocessing.h"
 #include "core/geometry.h"
 #include "core/deskew.h"
 #include "core/enhancement.h"
+
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+    yatagami::initThreadEnvironment();
+    return JNI_VERSION_1_6;
+}
 
 extern "C" {
 
 JNIEXPORT jfloatArray JNICALL
 Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocument(
         JNIEnv *env, jobject, jobject bitmap) {
+
+    yatagami::pinThreadToBigCores();
 
     cv::Mat img;
     if (!yatagami::bitmapToMat(env, bitmap, img)) {
@@ -31,6 +39,8 @@ JNIEXPORT jobject JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeWarpPerspective(
         JNIEnv *env, jobject, jobject srcBitmap, jfloatArray corners, jint dstWidth, jint dstHeight) {
 
+    yatagami::pinThreadToBigCores();
+
     cv::Mat src;
     if (!yatagami::bitmapToMat(env, srcBitmap, src)) {
         return nullptr;
@@ -51,6 +61,8 @@ JNIEXPORT jfloat JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeDetectSkewAngle(
         JNIEnv *env, jobject, jobject bitmap) {
 
+    yatagami::pinThreadToBigCores();
+
     cv::Mat bgr;
     if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
         return 0.0f;
@@ -63,6 +75,8 @@ Java_com_yatagami_opencv_ImageProcessor_nativeDetectSkewAngle(
 JNIEXPORT jobject JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeDeskew(
         JNIEnv *env, jobject, jobject bitmap) {
+
+    yatagami::pinThreadToBigCores();
 
     cv::Mat bgr;
     if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
@@ -78,6 +92,8 @@ JNIEXPORT jfloat JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeCalculateBlurScore(
         JNIEnv *env, jobject, jobject bitmap) {
 
+    yatagami::pinThreadToBigCores();
+
     cv::Mat bgr;
     if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
         return 0.0f;
@@ -89,6 +105,8 @@ Java_com_yatagami_opencv_ImageProcessor_nativeCalculateBlurScore(
 JNIEXPORT jfloat JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeCalculateGlareRatio(
         JNIEnv *env, jobject, jobject bitmap) {
+
+    yatagami::pinThreadToBigCores();
 
     cv::Mat bgr;
     if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
@@ -102,6 +120,8 @@ JNIEXPORT jint JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeRecommendFilter(
         JNIEnv *env, jobject, jobject bitmap) {
 
+    yatagami::pinThreadToBigCores();
+
     cv::Mat bgr;
     if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
         return 0;
@@ -113,6 +133,8 @@ Java_com_yatagami_opencv_ImageProcessor_nativeRecommendFilter(
 JNIEXPORT jobject JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeEnhanceImage(
         JNIEnv *env, jobject, jobject bitmap, jint mode) {
+
+    yatagami::pinThreadToBigCores();
 
     cv::Mat bgr;
     if (!yatagami::bitmapToMat(env, bitmap, bgr)) {

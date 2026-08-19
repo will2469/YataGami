@@ -11,6 +11,7 @@ import com.yatagami.data.model.ScannedPage
 import com.yatagami.data.repository.ScanRepository
 import com.yatagami.opencv.DocumentDetector
 import com.yatagami.opencv.ImageProcessor
+import com.yatagami.utils.DevicePerformanceMonitor
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -29,11 +30,23 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
     private val _events = MutableSharedFlow<ScanEvent>()
     val events: SharedFlow<ScanEvent> = _events
 
+    init {
+        DevicePerformanceMonitor.init(application)
+    }
+
     fun addPage(bitmap: Bitmap) {
         viewModelScope.launch {
             isProcessing.value = true
             val corners = detector.detectDocument(bitmap)
-            val warped = processor.warpPerspective(bitmap, corners, 2480, 3508) // ~A4 300dpi
+
+            // Adaptive resolution: 300 DPI (2480x3508) on normal, 200 DPI (1754x2480) on thermal throttling
+            val (dstW, dstH) = if (DevicePerformanceMonitor.isThermalThrottling.value) {
+                1754 to 2480
+            } else {
+                2480 to 3508
+            }
+
+            val warped = processor.warpPerspective(bitmap, corners, dstW, dstH)
             val page = ScannedPage(
                 originalBitmap = bitmap,
                 croppedBitmap = warped,

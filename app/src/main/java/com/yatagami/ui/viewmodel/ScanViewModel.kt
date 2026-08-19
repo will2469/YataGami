@@ -9,6 +9,9 @@ import androidx.lifecycle.viewModelScope
 import com.yatagami.data.model.FilterMode
 import com.yatagami.data.model.ScannedPage
 import com.yatagami.data.repository.ScanRepository
+import com.yatagami.data.session.DocumentSession
+import com.yatagami.data.session.DocumentSessionManager
+import com.yatagami.data.session.SessionStatus
 import com.yatagami.opencv.DocumentDetector
 import com.yatagami.opencv.ImageProcessor
 import com.yatagami.utils.DevicePerformanceMonitor
@@ -20,19 +23,84 @@ import kotlinx.coroutines.launch
 class ScanViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ScanRepository(application)
+    private val sessionManager = DocumentSessionManager.getInstance(application)
     private val detector = DocumentDetector()
     private val processor = ImageProcessor()
+
+    private var currentSession: DocumentSession = sessionManager.createNewSession()
 
     val pages = mutableStateListOf<ScannedPage>()
     val isProcessing = mutableStateOf(false)
     val currentTitle = mutableStateOf("")
     val isAutoSaveJpg = mutableStateOf(false)
 
+    val draftSession = mutableStateOf<DocumentSession?>(null)
+    val showDraftDialog = mutableStateOf(false)
+
     private val _events = MutableSharedFlow<ScanEvent>()
     val events: SharedFlow<ScanEvent> = _events
 
     init {
         DevicePerformanceMonitor.init(application)
+        sessionManager.cleanExpiredSessions()
+        checkDraftSession()
+    }
+
+    fun checkDraftSession() {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (sessionManager.hasValidDraftSession()) {
+                val draft = sessionManager.getDraftSession()
+                if (draft != null && draft.pages.isNotEmpty()) {
+                    draftSession.value = draft
+                    showDraftDialog.value = true
+                }
+            }
+        }
+    }
+
+    fun resumeDraftSession() {
+        val draft = draftSession.value ?: return
+        viewModelScope.launch {
+            isProcessing.value = true
+            val restoredPages = sessionManager.restorePagesFromDraft(draft)
+            pages.clear()
+            pages.addAll(restoredPages)
+            currentSession = draft
+            currentTitle.value = draft.title
+            showDraftDialog.value = false
+            draftSession.value = null
+            isProcessing.value = false
+        }
+    }
+
+    fun discardDraftSession() {
+        val draft = draftSession.value
+        if (draft != null) {
+            sessionManager.clearSession(draft.sessionId)
+        }
+        showDraftDialog.value = false
+        draftSession.value = null
+        currentSession = sessionManager.createNewSession()
+    }
+
+    fun forceSaveSession() {
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionManager.forceSave(currentSession)
+        }
+    }
+
+    private fun syncSessionPages() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val pageDatas = pages.map { page ->
+                sessionManager.persistPageBitmaps(currentSession.sessionId, page)
+            }
+            currentSession = currentSession.copy(
+                title = currentTitle.value,
+                pages = pageDatas,
+                updatedAt = System.currentTimeMillis()
+            )
+            sessionManager.requestSave(currentSession)
+        }
     }
 
     fun addPage(bitmap: Bitmap) {
@@ -43,7 +111,6 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 corners, bitmap.width.toFloat(), bitmap.height.toFloat()
             )
 
-            // Intelligent 150 DPI aspect ratio and orientation inference
             val docInfo = processor.inferDocumentType(corners)
             val warped = processor.warpPerspective(bitmap, corners, docInfo.targetWidth, docInfo.targetHeight)
             val enhanced = processor.enhanceImage(warped, FilterMode.AUTO)
@@ -59,7 +126,8 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 pageNumber = pages.size + 1
             )
             pages.add(page)
-            repository.cacheOriginalCapture(page)
+
+            syncSessionPages()
 
             if (isAutoSaveJpg.value) {
                 repository.saveSingleImageToGallery(page)
@@ -92,6 +160,7 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             page.processedBitmap = enhanced
 
             pages[idx] = page.copy()
+            syncSessionPages()
             isProcessing.value = false
         }
         return true
@@ -137,7 +206,8 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 page.filterMode = mode
                 page.processedBitmap = enhanced
             }
-            pages[idx] = page.copy() // trigger recomposition
+            pages[idx] = page.copy()
+            syncSessionPages()
             isProcessing.value = false
         }
     }
@@ -160,6 +230,7 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             page.orientationDegrees = (page.orientationDegrees + 90) % 360
 
             pages[idx] = page.copy()
+            syncSessionPages()
             isProcessing.value = false
         }
     }
@@ -169,12 +240,14 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         val moved = pages.removeAt(fromIndex)
         pages.add(toIndex, moved)
         pages.forEachIndexed { i, p -> p.pageNumber = i + 1 }
+        syncSessionPages()
     }
 
     fun restorePage(page: ScannedPage, atIndex: Int) {
         val targetIdx = atIndex.coerceIn(0, pages.size)
         pages.add(targetIdx, page)
         pages.forEachIndexed { i, p -> p.pageNumber = i + 1 }
+        syncSessionPages()
     }
 
     fun deletePage(pageId: String): Pair<ScannedPage, Int>? {
@@ -182,6 +255,7 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         if (idx != -1) {
             val removed = pages.removeAt(idx)
             pages.forEachIndexed { i, p -> p.pageNumber = i + 1 }
+            syncSessionPages()
             return removed to idx
         }
         return null
@@ -192,10 +266,13 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             isProcessing.value = true
             val result = repository.savePdf(pages, currentTitle.value.ifEmpty { "Document" })
             isProcessing.value = false
-            _events.emit(
-                if (result.isSuccess) ScanEvent.PdfSaved(result.getOrThrow())
-                else ScanEvent.Error(result.exceptionOrNull()?.message ?: "Unknown")
-            )
+            if (result.isSuccess) {
+                sessionManager.clearSession(currentSession.sessionId)
+                currentSession = sessionManager.createNewSession()
+                _events.emit(ScanEvent.PdfSaved(result.getOrThrow()))
+            } else {
+                _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Unknown error"))
+            }
         }
     }
 
@@ -204,10 +281,11 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             isProcessing.value = true
             val result = repository.saveImagesToGallery(pages)
             isProcessing.value = false
-            _events.emit(
-                if (result.isSuccess) ScanEvent.ImagesSaved(result.getOrThrow().size, result.getOrThrow())
-                else ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyimpan gambar")
-            )
+            if (result.isSuccess) {
+                _events.emit(ScanEvent.ImagesSaved(result.getOrThrow().size, result.getOrThrow()))
+            } else {
+                _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyimpan gambar"))
+            }
         }
     }
 

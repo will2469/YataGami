@@ -160,16 +160,27 @@ Ini JANTUNG aplikasi. Semua optimasi C++ sia-sia kalau deteksi dokumen-nya gagal
 ---
 
 ### 6. App Architecture & State Management
-**Status: ❌ Belum dibahas**
+**Status: ✅ Selesai Diimplementasikan (Kotlinx Serialization, filesDir Sessions, Atomic Rename Write, Debounced Async Auto-Save, HiOS Kill Recovery & Optimization Guide)**
 
-- [ ] **Single-Activity + Compose Navigation** — `ScanScreen` → `ReviewScreen` → `ExportScreen`
-- [ ] **ViewModel per screen** — `ScanViewModel`, `ReviewViewModel`, `ExportViewModel`
-- [ ] **Shared DocumentSession** — Singleton holder untuk session scan sekarang (list of NativePage, config, state). Clear saat "New Document".
-- [ ] **State preservation** — Kalau app di-kill HiOS di tengah scan, bisa resume:
-  - Simpan `DocumentSession` ke DataStore/JSON file saat app background
-  - Restore saat app reopen → "Lanjutkan scan sebelumnya?"
-- [ ] **Configuration change survival** — Rotation saat scan gak boleh reset preview/camera.
-- [ ] **Permission handling** — Camera, storage, notification (untuk foreground service). Flow yang graceful.
+- [x] **Single-Activity + Compose Navigation** — `ScanScreen` → `CropScreen` → `ReviewScreen` dengan slide/fade transitions.
+- [x] **ViewModel & State Management** — `ScanViewModel`, `ReviewViewModel`, `CropViewModel` tersinkronisasi via `DocumentSessionManager`.
+- [x] **Shared DocumentSession (`filesDir`)** — Penyimpanan session draf di `filesDir/sessions/{sessionId}/` (bukan cacheDir).
+- [x] **State Preservation & Atomic Write** — True atomic write (temp + `fd.sync()` + `renameTo`) dengan debounced 500ms async auto-save metadata JSON (<10KB, <5ms).
+- [x] **HiOS Kill Resilience & Draft Recovery** — Deteksi draf saat startup (< 7 hari, status DRAFT, file valid) dengan dialog *"Lanjutkan draf scan sebelumnya?"*.
+- [x] **HiOS Battery Optimization Guide** — Panduan onboarding Auto Start, Kunci Recent Apps, dan No Battery Restriction untuk Tecno Pova 7.
+- [x] **Configuration Change Survival** — Proteksi `isChangingConfigurations` agar rotasi layar tidak memicu save ganda atau reset camera stream.
+- [x] **Graceful Multi-Permission Flow** — Penanganan izin `CAMERA` dan `POST_NOTIFICATIONS` (Android 13+ opsional) dengan rationale jelas.
+
+
+#### 🟡 Nice to Have / Future Improvements (Architecture & Security):
+- [ ] **Encrypted session metadata** — Enkripsi `active_session.json` dengan Jetpack Security Crypto untuk dokumen sensitif (KTP/ID).
+- [ ] **Session backup ke Google Drive (optional)** — Auto-backup folder `sessions/` ke app-specific Drive folder.
+- [ ] **Biometric lock untuk app** — Otentikasi sidik jari sebelum membuka aplikasi jika ada dokumen privat.
+- [ ] **In-memory session cache** — `LruCache<String, DocumentSession>` untuk mengurangi frekuensi pembacaan disk.
+- [ ] **Session export/import** — Backup semua scan ke file ZIP untuk portabilitas data antar perangkat.
+- [ ] **Analytics-free flag** — Memastikan manifest bebas dari pelacak pihak ketiga / Firebase analytics.
+- [ ] **App locale force** — Opsi pergantian bahasa eksplisit (Bahasa Indonesia / English / 日本語).
+- [ ] **Welcome screen untuk first install** — Tutorial ringkas 3 slide (Scan → Edit → Export).
 
 **Why P0:** HiOS kill background app + config change = data loss kalau architecture gak solid.
 

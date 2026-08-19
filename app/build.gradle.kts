@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -86,6 +87,8 @@ dependencies {
 
     implementation(Deps.pdfboxAndroid)
     implementation(Deps.accompanistPermissions)
+    implementation(Deps.kotlinxSerializationJson)
 
     debugImplementation(Deps.composeUiTooling)
 }
+

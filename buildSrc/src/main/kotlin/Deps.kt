@@ -11,6 +11,7 @@ object Versions {
     const val coroutines = "1.8.1"
     const val pdfbox = "2.0.27.0"
     const val accompanist = "0.34.0"
+    const val kotlinxSerialization = "1.6.3"
     const val ndk = "26.3.11579264"
     const val cmake = "3.22.1"
 }
@@ -39,4 +40,6 @@ object Deps {
 
     const val pdfboxAndroid = "com.tom-roush:pdfbox-android:${Versions.pdfbox}"
     const val accompanistPermissions = "com.google.accompanist:accompanist-permissions:${Versions.accompanist}"
+    const val kotlinxSerializationJson = "org.jetbrains.kotlinx:kotlinx-serialization-json:${Versions.kotlinxSerialization}"
 }
+

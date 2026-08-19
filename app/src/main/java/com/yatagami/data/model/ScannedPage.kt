@@ -1,8 +1,10 @@
 package com.yatagami.data.model
 
 import android.graphics.Bitmap
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
+@Serializable
 enum class DocumentType(val displayName: String) {
     A4("A4 Dokumen"),
     KTP("KTP / ID Card"),
@@ -12,6 +14,7 @@ enum class DocumentType(val displayName: String) {
     FREEFORM("Kustom")
 }
 
+@Serializable
 enum class PageStatus {
     CAPTURED,
     WARPED,
@@ -19,6 +22,7 @@ enum class PageStatus {
     PROCESSED,
     ERROR
 }
+
 
 data class ScannedPage(
     val id: String = UUID.randomUUID().toString(),

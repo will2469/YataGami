@@ -1,0 +1,7 @@
+-keep class com.yatagami.opencv.** { *; }
+-keepclassmembers class com.yatagami.opencv.** { *; }
+-dontwarn com.yatagami.opencv.**
+-keep class com.tom_roush.pdfbox.** { *; }
+-dontwarn com.tom_roush.pdfbox.**
+-keep class org.opencv.** { *; }
+-dontwarn org.opencv.**

@@ -9,10 +9,16 @@ data class ScannedPage(
     var croppedBitmap: Bitmap? = null,
     var filterMode: FilterMode = FilterMode.AUTO,
     var processedBitmap: Bitmap? = null,
-    val corners: FloatArray = floatArrayOf(),
+    var originalCorners: FloatArray = floatArrayOf(),
+    var manualCorners: FloatArray? = null,
+    var isManuallyAdjusted: Boolean = false,
+    var autoConfidence: Float = 0.0f,
     var pageNumber: Int = 0,
     var cacheFilePath: String? = null
 ) {
+    val corners: FloatArray
+        get() = manualCorners ?: originalCorners
+
     fun getDisplayBitmap(): Bitmap {
         return processedBitmap ?: croppedBitmap ?: originalBitmap
     }

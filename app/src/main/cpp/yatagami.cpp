@@ -16,6 +16,10 @@ JNIEXPORT jboolean JNICALL
 Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocumentDirect(
         JNIEnv *env, jobject, jobject bitmap, jobject directBuffer);
 
+JNIEXPORT jfloat JNICALL
+Java_com_yatagami_opencv_DocumentDetector_nativeCalculateConfidence(
+        JNIEnv *env, jobject, jfloatArray corners, jfloat imgWidth, jfloat imgHeight);
+
 JNIEXPORT jobject JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeWarpPerspective(
         JNIEnv *env, jobject, jobject srcBitmap, jfloatArray corners, jint dstWidth, jint dstHeight);
@@ -61,7 +65,8 @@ Java_com_yatagami_opencv_ImageProcessor_nativeProcessPageFull(
 
 static const JNINativeMethod gDocumentDetectorMethods[] = {
     {"nativeDetectDocument", "(Landroid/graphics/Bitmap;)[F", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocument},
-    {"nativeDetectDocumentDirect", "(Landroid/graphics/Bitmap;Ljava/nio/ByteBuffer;)Z", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocumentDirect}
+    {"nativeDetectDocumentDirect", "(Landroid/graphics/Bitmap;Ljava/nio/ByteBuffer;)Z", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocumentDirect},
+    {"nativeCalculateConfidence", "([FFF)F", (void*)Java_com_yatagami_opencv_DocumentDetector_nativeCalculateConfidence}
 };
 
 static const JNINativeMethod gImageProcessorMethods[] = {
@@ -149,6 +154,21 @@ Java_com_yatagami_opencv_DocumentDetector_nativeDetectDocumentDirect(
     }
 
     return JNI_TRUE;
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_yatagami_opencv_DocumentDetector_nativeCalculateConfidence(
+        JNIEnv *env, jobject, jfloatArray corners, jfloat imgWidth, jfloat imgHeight) {
+
+    if (!corners || env->GetArrayLength(corners) < 8) return 0.0f;
+    jfloat *pts = env->GetFloatArrayElements(corners, nullptr);
+    std::vector<cv::Point2f> docCorners = {
+        {pts[0], pts[1]}, {pts[2], pts[3]},
+        {pts[4], pts[5]}, {pts[6], pts[7]}
+    };
+    env->ReleaseFloatArrayElements(corners, pts, 0);
+
+    return yatagami::calculateQuadConfidence(docCorners, imgWidth, imgHeight);
 }
 
 JNIEXPORT jobject JNICALL

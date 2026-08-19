@@ -38,6 +38,9 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             isProcessing.value = true
             val corners = detector.detectDocument(bitmap)
+            val confidence = detector.calculateConfidence(
+                corners, bitmap.width.toFloat(), bitmap.height.toFloat()
+            )
 
             // Adaptive resolution: 300 DPI (2480x3508) on normal, 200 DPI (1754x2480) on thermal throttling
             val (dstW, dstH) = if (DevicePerformanceMonitor.isThermalThrottling.value) {
@@ -53,7 +56,8 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 croppedBitmap = warped,
                 filterMode = FilterMode.AUTO,
                 processedBitmap = enhanced,
-                corners = corners,
+                originalCorners = corners,
+                autoConfidence = confidence,
                 pageNumber = pages.size + 1
             )
             pages.add(page)
@@ -66,6 +70,60 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             isProcessing.value = false
             _events.emit(ScanEvent.PageAdded(page.id))
         }
+    }
+
+    fun updateCropCorners(pageId: String, newCorners: FloatArray): Boolean {
+        val idx = pages.indexOfFirst { it.id == pageId }
+        if (idx == -1 || newCorners.size < 8) return false
+        val page = pages[idx]
+
+        // Pre-validation: ensure minimum area and non-self-intersecting
+        val (dstW, dstH) = if (DevicePerformanceMonitor.isThermalThrottling.value) {
+            1754 to 2480
+        } else {
+            2480 to 3508
+        }
+
+        viewModelScope.launch {
+            isProcessing.value = true
+            val warped = processor.warpPerspective(page.originalBitmap, newCorners, dstW, dstH)
+            val enhanced = processor.enhanceImage(warped, page.filterMode)
+
+            page.manualCorners = newCorners
+            page.isManuallyAdjusted = true
+            page.croppedBitmap?.recycle()
+            page.processedBitmap?.recycle()
+            page.croppedBitmap = warped
+            page.processedBitmap = enhanced
+
+            pages[idx] = page.copy()
+            isProcessing.value = false
+        }
+        return true
+    }
+
+    fun resetCropToAuto(pageId: String) {
+        val idx = pages.indexOfFirst { it.id == pageId }
+        if (idx == -1) return
+        val page = pages[idx]
+        page.manualCorners = null
+        page.isManuallyAdjusted = false
+        updateCropCorners(pageId, page.originalCorners)
+    }
+
+    fun resetCropToFull(pageId: String) {
+        val idx = pages.indexOfFirst { it.id == pageId }
+        if (idx == -1) return
+        val page = pages[idx]
+        val w = page.originalBitmap.width.toFloat()
+        val h = page.originalBitmap.height.toFloat()
+        val fullCorners = floatArrayOf(
+            0f, 0f,
+            w, 0f,
+            w, h,
+            0f, h
+        )
+        updateCropCorners(pageId, fullCorners)
     }
 
     fun updateFilter(pageId: String, mode: FilterMode) {

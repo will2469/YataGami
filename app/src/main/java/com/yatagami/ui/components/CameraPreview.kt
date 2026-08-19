@@ -172,7 +172,9 @@ fun CameraPreview(
 private var lastAutoCaptureTime = 0L
 private const val AUTO_CAPTURE_COOLDOWN = 2500L
 private var previousCorners: List<PointF>? = null
+private var smoothedCorners: List<PointF>? = null
 private var stableFrameCount = 0
+private const val EMA_ALPHA = 0.35f
 
 private fun analyzeFrame(
     imageProxy: ImageProxy,
@@ -204,17 +206,41 @@ private fun analyzeFrame(
     CoroutineScope(Dispatchers.Default).launch {
         try {
             val cornersArray = detector.detectDocument(bitmap)
-            val pts = cornersArray.toList().chunked(2).map {
+            val confidence = detector.calculateConfidence(
+                cornersArray, bitmap.width.toFloat(), bitmap.height.toFloat()
+            )
+
+            val rawPts = cornersArray.toList().chunked(2).map {
                 PointF(it[0], it[1])
             }
 
-            val isFullImageFallback = (cornersArray[0] == 0f && cornersArray[1] == 0f)
-            val isStable = checkCornerStability(pts, isFullImageFallback)
+            val isFullImageFallback = (cornersArray[0] == 0f && cornersArray[1] == 0f) || confidence < 0.3f
 
-            onDocumentDetected(pts, isStable)
+            // EMA Temporal Smoothing: Alpha = 0.35 for responsive yet silky-smooth transitions
+            val finalPts = if (confidence >= 0.55f && rawPts.size == 4) {
+                val prev = smoothedCorners
+                if (prev != null && prev.size == 4) {
+                    (0 until 4).map { i ->
+                        PointF(
+                            EMA_ALPHA * rawPts[i].x + (1f - EMA_ALPHA) * prev[i].x,
+                            EMA_ALPHA * rawPts[i].y + (1f - EMA_ALPHA) * prev[i].y
+                        )
+                    }
+                } else {
+                    rawPts
+                }
+            } else {
+                // Low confidence: retain previous position to avoid jumpy jitter
+                smoothedCorners ?: rawPts
+            }
+            smoothedCorners = finalPts
+
+            val isStable = checkCornerStability(finalPts, isFullImageFallback, confidence)
+
+            onDocumentDetected(finalPts, isStable)
 
             val now = System.currentTimeMillis()
-            if (autoCaptureEnabled && isStable && !isFullImageFallback && (now - lastAutoCaptureTime > AUTO_CAPTURE_COOLDOWN)) {
+            if (autoCaptureEnabled && isStable && !isFullImageFallback && confidence >= 0.70f && (now - lastAutoCaptureTime > AUTO_CAPTURE_COOLDOWN)) {
                 lastAutoCaptureTime = now
                 takeManualPicture(imageCapture, executor, onImageCaptured)
             }
@@ -224,8 +250,8 @@ private fun analyzeFrame(
     }
 }
 
-private fun checkCornerStability(current: List<PointF>, isFallback: Boolean): Boolean {
-    if (isFallback || current.size != 4) {
+private fun checkCornerStability(current: List<PointF>, isFallback: Boolean, confidence: Float): Boolean {
+    if (isFallback || current.size != 4 || confidence < 0.65f) {
         stableFrameCount = 0
         previousCorners = null
         return false
@@ -241,8 +267,8 @@ private fun checkCornerStability(current: List<PointF>, isFallback: Boolean): Bo
             if (dist > maxMovement) maxMovement = dist
         }
 
-        // Stability threshold: points move < 18 pixels between frames
-        if (maxMovement < 18f) {
+        // Stability threshold: points move < 15 pixels between frames
+        if (maxMovement < 15f) {
             stableFrameCount++
         } else {
             stableFrameCount = 0

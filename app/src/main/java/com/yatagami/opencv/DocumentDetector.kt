@@ -30,6 +30,12 @@ class DocumentDetector {
         }
     }
 
+    fun calculateConfidence(corners: FloatArray, width: Float, height: Float): Float {
+        if (corners.size < 8) return 0f
+        return nativeCalculateConfidence(corners, width, height)
+    }
+
     private external fun nativeDetectDocument(bitmap: Bitmap): FloatArray
     private external fun nativeDetectDocumentDirect(bitmap: Bitmap, directBuffer: ByteBuffer): Boolean
+    private external fun nativeCalculateConfidence(corners: FloatArray, width: Float, height: Float): Float
 }

@@ -42,7 +42,7 @@ private:
 
     std::mutex mutex_;
     std::unordered_map<PoolKey, std::vector<cv::Mat>, KeyHash> pool_;
-    static constexpr size_t MAX_PER_KEY = 4;
+    static constexpr size_t MAX_PER_KEY = 16;
 };
 
 // RAII Scoped Pooled Mat

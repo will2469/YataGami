@@ -47,13 +47,17 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val warped = processor.warpPerspective(bitmap, corners, dstW, dstH)
+            val enhanced = processor.enhanceImage(warped, FilterMode.AUTO)
             val page = ScannedPage(
                 originalBitmap = bitmap,
                 croppedBitmap = warped,
+                filterMode = FilterMode.AUTO,
+                processedBitmap = enhanced,
                 corners = corners,
                 pageNumber = pages.size + 1
             )
             pages.add(page)
+            repository.cacheOriginalCapture(page)
 
             if (isAutoSaveJpg.value) {
                 repository.saveSingleImageToGallery(page)

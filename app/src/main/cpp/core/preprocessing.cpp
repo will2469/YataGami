@@ -63,7 +63,14 @@ cv::Mat applyCLAHEGray(const cv::Mat& gray) {
 }
 
 void applyNoiseReduction(const cv::Mat& gray, cv::Mat& dst) {
-    cv::bilateralFilter(gray, dst, 7, 50, 50);
+    cv::Scalar meanVal = cv::mean(gray);
+    if (meanVal[0] < 55.0) {
+        // True low-light: invoke edge-preserving bilateral filter
+        cv::bilateralFilter(gray, dst, 5, 45, 45);
+    } else {
+        // Normal lighting: 9-in-1 pixel binning sensor provides clean signal, use fast Gaussian blur
+        cv::GaussianBlur(gray, dst, cv::Size(3, 3), 0);
+    }
 }
 
 cv::Mat applyNoiseReduction(const cv::Mat& gray) {

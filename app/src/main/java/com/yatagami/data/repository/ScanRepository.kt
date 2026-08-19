@@ -26,6 +26,22 @@ class ScanRepository(private val context: Context) {
         PDFBoxResourceLoader.init(context)
     }
 
+    suspend fun cacheOriginalCapture(page: ScannedPage): String? = withContext(Dispatchers.IO) {
+        try {
+            val cacheDir = File(context.cacheDir, "scan_originals")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
+            val file = File(cacheDir, "${page.id}_raw.jpg")
+            FileOutputStream(file).use { out ->
+                page.originalBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            }
+            page.cacheFilePath = file.absolutePath
+            file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     suspend fun saveImagesToGallery(
         pages: List<ScannedPage>,
         quality: Int = 90
@@ -98,6 +114,8 @@ class ScanRepository(private val context: Context) {
         quality: Int = 85
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            com.yatagami.service.PdfProcessingService.start(context, "Menyusun PDF... (0/${pages.size} halaman)")
+
             val document = PDDocument()
             val info = PDDocumentInformation()
             info.title = title
@@ -105,7 +123,13 @@ class ScanRepository(private val context: Context) {
             info.creationDate = Calendar.getInstance()
             document.documentInformation = info
 
-            for (page in pages.sortedBy { it.pageNumber }) {
+            val sortedPages = pages.sortedBy { it.pageNumber }
+            for ((index, page) in sortedPages.withIndex()) {
+                com.yatagami.service.PdfProcessingService.updateProgress(
+                    context,
+                    "Menyusun PDF... (${index + 1}/${sortedPages.size} halaman)"
+                )
+
                 val bitmap = page.getDisplayBitmap()
                 val widthPt = PDRectangle.A4.width
                 val heightPt = PDRectangle.A4.height
@@ -160,6 +184,8 @@ class ScanRepository(private val context: Context) {
             Result.success(uri)
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            com.yatagami.service.PdfProcessingService.stop(context)
         }
     }
 }

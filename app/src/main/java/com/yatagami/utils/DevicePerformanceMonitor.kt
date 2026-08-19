@@ -23,7 +23,8 @@ object DevicePerformanceMonitor {
                 val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 powerManager?.addThermalStatusListener { status ->
                     thermalStatus.intValue = status
-                    val throttling = (status >= PowerManager.THERMAL_STATUS_MODERATE)
+                    // Tecno Pova 7 (7000 mAh, 6nm TSMC) has higher thermal dissipation headroom -> throttle only at SEVERE
+                    val throttling = (status >= PowerManager.THERMAL_STATUS_SEVERE)
                     isThermalThrottling.value = throttling
                     Log.i(TAG, "Thermal status updated: $status (throttling: $throttling)")
                 }
@@ -39,6 +40,7 @@ object DevicePerformanceMonitor {
     }
 
     fun isUnderMemoryPressure(): Boolean {
-        return getUsedMemoryMB() > 220
+        // 8GB RAM LPDDR4X on Tecno Pova 7 provides ample memory headroom
+        return getUsedMemoryMB() > 500
     }
 }

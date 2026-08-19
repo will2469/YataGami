@@ -7,10 +7,11 @@ data class ScannedPage(
     val id: String = UUID.randomUUID().toString(),
     val originalBitmap: Bitmap,
     var croppedBitmap: Bitmap? = null,
-    var filterMode: FilterMode = FilterMode.NONE,
+    var filterMode: FilterMode = FilterMode.AUTO,
     var processedBitmap: Bitmap? = null,
     val corners: FloatArray = floatArrayOf(),
-    var pageNumber: Int = 0
+    var pageNumber: Int = 0,
+    var cacheFilePath: String? = null
 ) {
     fun getDisplayBitmap(): Bitmap {
         return processedBitmap ?: croppedBitmap ?: originalBitmap

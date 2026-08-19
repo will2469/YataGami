@@ -79,9 +79,20 @@ fun CameraPreview(
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
 
-                    // 2. ImageCapture Builder optimized for Helio G100 ISP (Zero Shutter Lag + Hardware NR/Edge)
+                    // 2. ImageCapture Builder optimized for Tecno Pova 7 108MP (12MP 9-in-1 binned sweet spot + ZSL)
+                    val resolutionSelector = androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            androidx.camera.core.resolutionselector.ResolutionStrategy(
+                                android.util.Size(4000, 3000),
+                                androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                            )
+                        )
+                        .setAspectRatioStrategy(androidx.camera.core.resolutionselector.AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .build()
+
                     val captureBuilder = ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG)
+                        .setResolutionSelector(resolutionSelector)
 
                     val captureExtender = Camera2Interop.Extender(captureBuilder)
                     // Request MediaTek Hardware Noise Reduction (MNRF / ANRF)
@@ -93,6 +104,11 @@ fun CameraPreview(
                     captureExtender.setCaptureRequestOption(
                         CaptureRequest.EDGE_MODE,
                         CaptureRequest.EDGE_MODE_HIGH_QUALITY
+                    )
+                    // Hardware Document Steady Capture Optimization
+                    captureExtender.setCaptureRequestOption(
+                        CaptureRequest.CONTROL_SCENE_MODE,
+                        CaptureRequest.CONTROL_SCENE_MODE_STEADYPHOTO
                     )
                     // Hardware Lens Shading Correction
                     captureExtender.setCaptureRequestOption(

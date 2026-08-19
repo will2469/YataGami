@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.OutlinedButton
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.collectLatest
 fun PageListScreen(navController: NavController, viewModel: com.yatagami.ui.viewmodel.ScanViewModel) {
     var showTitleDialog by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
+    var showHiOsDialog by remember { mutableStateOf(false) }
     var successMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -79,6 +81,9 @@ fun PageListScreen(navController: NavController, viewModel: com.yatagami.ui.view
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showHiOsDialog = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "Optimasi HiOS")
+                    }
                     IconButton(onClick = { showTitleDialog = true }) {
                         Icon(Icons.Default.Share, contentDescription = "Simpan PDF")
                     }
@@ -86,6 +91,9 @@ fun PageListScreen(navController: NavController, viewModel: com.yatagami.ui.view
             )
         }
     ) { padding ->
+        if (showHiOsDialog) {
+            HiOsOptimizationDialog(onDismiss = { showHiOsDialog = false })
+        }
         if (viewModel.pages.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),

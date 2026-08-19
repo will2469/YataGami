@@ -83,32 +83,30 @@ Ini JANTUNG aplikasi. Semua optimasi C++ sia-sia kalau deteksi dokumen-nya gagal
 ---
 
 ### 3. Enhancement Pipeline (Tiered Engine)
-**Status: ⚠️ Konsep ada, implementasi belum**
+**Status: ✅ Selesai Diimplementasikan (Tier 1 Fast, Tier 2 Standard, Tier 3 Quality, LAB L-Channel CLAHE, & O(1) Fast Filter Modes)**
 
-- [ ] **Tier 1 — Fast (Preview & Quick Export)**
-  - CLAHE saja (lightweight)
-  - White point auto (simple histogram-based)
-  - Target: < 100ms di native
-- [ ] **Tier 2 — Standard (Default)**
-  - Bilateral filter (radius kecil, d=5) atau approximate bilateral
-  - CLAHE (clipLimit=2.0, tileSize=8x8)
-  - White balance (Grayworld atau White Patch)
-  - Shadow removal (mild — illumination compensation)
-  - Target: < 500ms
-- [ ] **Tier 3 — Quality (Manual/Special Documents)**
-  - Full bilateral (d=9)
-  - CLAHE agresif (clipLimit=4.0)
-  - Shadow removal full (background illumination estimation + division)
-  - Color constancy (Shades of Gray atau higher-order method)
-  - Denoise multi-frame (kalau burst available)
-  - Target: < 2 detik, tapi hasil terbaik
-- [ ] **Auto-tier selection** — App detect kondisi & pilih tier:
-  - Good light + flat doc → Tier 1
-  - Low light / shadow / glossy → Tier 2
-  - User explicitly pilih Tier 3
-- [ ] **LUT-based fast path** — Precompute LUT untuk gamma, contrast, tone mapping. Apply via `cv::LUT()` = O(1) per piksel.
+- [x] **Tier 1 — Fast (Preview & Quick Export)**
+  - CLAHE eksklusif pada LAB L-Channel (clipLimit=2.0, tileSize=8x8, tanpa distorsi warna A & B)
+  - Auto White Point percentile dynamic range stretch (1% & 99%) via 256-byte L1 Cache LUT
+  - Target: < 100ms di native Helio G100
+- [x] **Tier 2 — Standard (Default)**
+  - Fast edge-preserving surface blur (~15-20ms, bukan OpenCV bilateral lambat)
+  - CLAHE L-Channel (clipLimit=2.5, tileSize=8x8)
+  - Modified White Patch / Grayworld AWB color cast compensation
+  - Glare clamp & suppression pada L-Channel sebelum CLAHE
+  - Target: < 400ms
+- [x] **Tier 3 — Quality (Manual/Special Documents)**
+  - Urutan pipeline kritis: Color Constancy → Background Illumination Flattening (Gaussian blur 101×101 + power factor 0.8) → Bilateral denoise (d=9, sigma=75) → Aggressive CLAHE (clipLimit=4.0) → Adaptive text edge unsharp masking (r=1.0, k=1.2)
+  - Target: < 1.5 detik dengan hasil terbaik
+- [x] **Auto-tier selection** — Multi-metric scene analysis: meanL, stdDevL, darkRatio, brightRatio, glareRatio, blurScore, noiseEstimate
+- [x] **LUT-based fast path & Master Transform** — Master enhanced image digenerate sekali, pergantian filter mode (Magic Color, B&W, Gray, Sharpen) merupakan transformasi O(1) < 20ms tanpa alokasi memori ulang.
 
-**Why P0:** "Image improvement" adalah value proposition utama. Tanpa ini, hasil sama aja kayak kamera bawaan.
+#### 🟡 Nice to Have / Future Improvements (Enhancement Pipeline):
+- [ ] **Progressive enhancement preview** — Tampilkan hasil Tier 1 dulu (<100ms), lalu background upgrade ke Tier 2/3 (instant UX).
+- [ ] **Per-region tier** — Area bayangan menggunakan Tier 3 lokal, area terang menggunakan Tier 1 (kualitas merata).
+- [ ] **Save "Master" processed image** — Simpan cache hasil Tier 2/3 tanpa filter mode agar user bisa beralih filter tanpa re-processing.
+- [ ] **Histogram equalization fallback** — Jika terjadi artifact CLAHE pada region datar, fallback otomatis ke gentle histogram stretch.
+- [ ] **Adaptive denoise strength** — Estimasi noise tinggi → meningkatkan sigmaColor bilateral secara adaptif.
 
 ---
 

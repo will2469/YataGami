@@ -82,15 +82,15 @@ FLASH_MODE: AUTO (Tecno punya dual LED, cukup powerful)
 ### 5. Cortex-A76 (Bukan A75!) Thread Optimization
 
 **A76 vs A75 improvement:**
-- ~20-25% better IPC (instructions per clock)
-- Better branch prediction
-- Larger L3 cache (likely 2MB di Helio G100)
+- ~25-30% better IPC & dual-issue NEON SIMD execution engine
+- Better branch prediction & lower memory load latency
+- Shared System-Level Cache (SLC / L3) ~2MB di Helio G100
 
 **Optimasi thread pinning yang di-update:**
-- [ ] **Pin CV thread ke CPU 0-1 (Cortex-A76 cores)** — Di Helio G100, big cores biasanya CPU 0 & 1. Verifikasi dengan `/proc/cpuinfo`.
-- [ ] **`cv::setNumThreads(3)` (bukan 2)** — A76 lebih kencang, bisa handle 3 thread parallel untuk imgproc (2 big + 1 medium dari A55). Test benchmark dulu.
-- [ ] **Gunakan `THREAD_PRIORITY_URGENT_AUDIO` untuk thread warp** — A76 dengan priority tinggi = processing hampir real-time untuk 12MP.
-- [ ] **L3 cache-aware processing** — A76 punya L3 cache lebih besar. Proses gambar dalam chunk yang muat di L3 (~2MB = area ~1500x1500 pixel). Split large image processing jika perlu.
+- [x] **Pin CV thread ke CPU 6-7 (Cortex-A76 cores)** — Di Helio G100 (DynamIQ), CPU 0-5 adalah A55 (LITTLE), CPU 6 & 7 adalah A76 (BIG). Deteksi otomatis via `cpuinfo_max_freq` di `scheduler.cpp`.
+- [x] **`cv::setNumThreads(2)` (fokus 2x Big Core)** — Menghindari *straggler effect* dari core A55 yang lambat agar latensi warp 12MP seragam & maksimal.
+- [x] **Gunakan `nice -10` / `THREAD_PRIORITY_DISPLAY` untuk thread warp** — Prioritas tinggi untuk pemrosesan dokumen tanpa mengganggu audio subsystem (`URGENT_AUDIO`).
+- [x] **Cache-friendly processing** — Memanfaatkan L1/L2 cache per core A76 (64KB L1 / 256-512KB L2) via row-major scanline processing bawaan OpenCV untuk mencegah memory thrashing pada citra 12MP RGBA.
 
 ### 6. MediaTek ISP & Imagiq (Helio G100 Ultimate)
 
@@ -100,17 +100,17 @@ Helio G100 pakai **MediaTek Imagiq ISP** yang support:
 - Hardware HDR pipeline
 
 **Leverage ISP hardware:**
-- [ ] **Request `NOISE_REDUCTION_MODE_HIGH_QUALITY`** — Ini pakai MFNR hardware ISP, BUKAN software. Hasil: noise berkurang tanpa CPU cost.
-- [ ] **Request `EDGE_MODE_HIGH_QUALITY`** — ISP sharpening hardware, lebih baik & lebih hemat baterai dari unsharp mask OpenCV.
-- [ ] **Aktifkan AE/AWB lock saat dokumen terdeteksi stabil** — Biar ISP gak re-adjust terus (flicker). Lock exposure + white balance.
-- [ ] **Scene mode `SCENE_MODE_DOCUMENT` kalau tersedia** — Beberapa MediaTek ISP punya tuning khusus dokumen (sharper edges, better contrast). Cek `CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES` dan `SCALER_AVAILABLE_STREAM_CONFIGURATIONS`.
-- [ ] **Avoid software processing yang redundant dengan ISP** — Kalau sudah pakai hardware NR & edge enhancement, **turunkan intensitas bilateral filter & unsharp mask di OpenCV**. Jangan double-sharpen.
+- [x] **Request `NOISE_REDUCTION_MODE_HIGH_QUALITY`** — Mengaktifkan MFNR hardware ISP pada stream `ImageCapture` di `CameraStreamManager.kt` untuk noise minimal tanpa beban CPU.
+- [x] **Request `EDGE_MODE_HIGH_QUALITY`** — Hardware ISP edge sharpening aktif di `CameraStreamManager.kt` untuk teks dokumen yang tajam alami.
+- [ ] **Aktifkan AE/AWB lock saat dokumen terdeteksi stabil** — Kunci `CONTROL_AE_LOCK` & `CONTROL_AWB_LOCK` saat kontur stabil ($\Delta < 18\text{px}$) untuk mencegah flicker & pergeseran white balance.
+- [x] **Scene mode `STEADYPHOTO` / `DOCUMENT`** — Memanfaatkan mode pemotretan stabil di level ISP Camera2 untuk meminimalisir hand jitter.
+- [x] **Bypass software bilateral filter di kondisi cahaya normal** — Deteksi adaptif di `preprocessing.cpp` mengandalkan 9-in-1 binning + ISP NR untuk mencegah double-smoothing & menghemat CPU.
 
 ### 7. Mali-G57 MC2 @ 1000MHz Reality
 
 Clock 1000MHz sedikit lebih tinggi dari perkiraan, tapi tetap **2 core only**.
-- [ ] **Tetap skip GPU compute** — 2 core MC2 tetap lemah untuk CV. 1000MHz gak signifikan.
-- [ ] **Tapi GPU OK untuk Compose rendering** — Pastikan `hardwareAccelerated="true"` di manifest. Compose UI akan lancar.
+- [x] **Tetap skip GPU compute** — 2 core MC2 memiliki overhead buffer dispatch tinggi; pemrosesan CV murni dialokasikan ke 2x CPU Cortex-A76 + NEON intrinsics.
+- [x] **GPU khusus untuk Compose UI rendering** — Pipeline Skia/RenderThread memanfaatkan Mali-G57 untuk UI 60 FPS mulus tanpa membebani CPU.
 
 ---
 
@@ -207,7 +207,7 @@ Dengan optimalisasi di atas, target di device-mu:
 4. ForegroundService + WakeLock untuk PDF generation
 
 ### Phase 2: Leverage Hardware
-5. Thread pinning ke A76 (CPU 0-1) + `cv::setNumThreads(3)`
+5. Thread pinning ke A76 (CPU 6-7) + `cv::setNumThreads(2)`
 6. AE/AWB lock saat dokumen stabil
 7. Multi-frame burst 5 frame untuk low-light
 8. Thermal threshold agresif (baru turun di SEVERE)

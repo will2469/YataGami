@@ -3,11 +3,22 @@ package com.yatagami.data.model
 import android.graphics.Bitmap
 import java.util.UUID
 
+enum class DocumentType(val displayName: String) {
+    A4("A4 Dokumen"),
+    KTP("KTP / ID Card"),
+    F4("F4 / Folio"),
+    RECEIPT("Struk / Bon"),
+    SQUARE("Foto Persegi"),
+    FREEFORM("Kustom")
+}
+
 data class ScannedPage(
     val id: String = UUID.randomUUID().toString(),
     val originalBitmap: Bitmap,
     var croppedBitmap: Bitmap? = null,
     var filterMode: FilterMode = FilterMode.AUTO,
+    var docType: DocumentType = DocumentType.A4,
+    var isPortrait: Boolean = true,
     var processedBitmap: Bitmap? = null,
     var originalCorners: FloatArray = floatArrayOf(),
     var manualCorners: FloatArray? = null,

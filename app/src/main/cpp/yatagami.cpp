@@ -61,6 +61,10 @@ Java_com_yatagami_opencv_ImageProcessor_nativeProcessPageFull(
         JNIEnv *env, jobject, jobject srcBitmap, jobject dstBitmap, jfloatArray outCorners,
         jint filterMode, jint dstWidth, jint dstHeight);
 
+JNIEXPORT jintArray JNICALL
+Java_com_yatagami_opencv_ImageProcessor_nativeInferDocumentType(
+        JNIEnv *env, jobject, jfloatArray corners);
+
 }
 
 static const JNINativeMethod gDocumentDetectorMethods[] = {
@@ -79,7 +83,8 @@ static const JNINativeMethod gImageProcessorMethods[] = {
     {"nativeEnhanceImage", "(Landroid/graphics/Bitmap;I)Landroid/graphics/Bitmap;", (void*)Java_com_yatagami_opencv_ImageProcessor_nativeEnhanceImage},
     {"nativeEnhanceImageDirect", "(Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;I)Z", (void*)Java_com_yatagami_opencv_ImageProcessor_nativeEnhanceImageDirect},
     {"nativeClearBufferPool", "()V", (void*)Java_com_yatagami_opencv_ImageProcessor_nativeClearBufferPool},
-    {"nativeProcessPageFull", "(Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;[FIII)Z", (void*)Java_com_yatagami_opencv_ImageProcessor_nativeProcessPageFull}
+    {"nativeProcessPageFull", "(Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;[FIII)Z", (void*)Java_com_yatagami_opencv_ImageProcessor_nativeProcessPageFull},
+    {"nativeInferDocumentType", "([F)[I", (void*)Java_com_yatagami_opencv_ImageProcessor_nativeInferDocumentType}
 };
 
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
@@ -336,6 +341,35 @@ Java_com_yatagami_opencv_ImageProcessor_nativeProcessPageFull(
     // 4. Zero-copy write to destination bitmap
     bool ok = yatagami::matToBitmapDirect(env, finalEnhanced, dstBitmap);
     return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_yatagami_opencv_ImageProcessor_nativeInferDocumentType(
+        JNIEnv *env, jobject, jfloatArray corners) {
+
+    jintArray result = env->NewIntArray(4);
+    if (!corners || env->GetArrayLength(corners) < 8) {
+        jint defaultRes[4] = {0, 1, 1240, 1754};
+        env->SetIntArrayRegion(result, 0, 4, defaultRes);
+        return result;
+    }
+
+    jfloat *pts = env->GetFloatArrayElements(corners, nullptr);
+    std::vector<cv::Point2f> srcPts = {
+        {pts[0], pts[1]}, {pts[2], pts[3]},
+        {pts[4], pts[5]}, {pts[6], pts[7]}
+    };
+    env->ReleaseFloatArrayElements(corners, pts, 0);
+
+    yatagami::DocumentTypeResult docRes = yatagami::inferDocumentTypeAndSize(srcPts);
+    jint vals[4] = {
+        static_cast<jint>(docRes.type),
+        docRes.isPortrait ? 1 : 0,
+        docRes.targetWidth,
+        docRes.targetHeight
+    };
+    env->SetIntArrayRegion(result, 0, 4, vals);
+    return result;
 }
 
 }

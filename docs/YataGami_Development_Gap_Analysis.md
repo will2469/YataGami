@@ -59,19 +59,26 @@ Ini JANTUNG aplikasi. Semua optimasi C++ sia-sia kalau deteksi dokumen-nya gagal
 ---
 
 ### 2. Perspective Warp & Deskew Pipeline
-**Status: ❌ Belum ada design concrete**
+**Status: ✅ Selesai Diimplementasikan (Tiered 150 DPI, Orientation-Aware Inference, BORDER_CONSTANT 20px padding, Conditional Deskew & Smart Content Trim)**
 
-- [ ] **Perspective transform** — Dari 4 corner detected → warp ke rectangle A4/Letter/ID card aspect ratio
-- [ ] **Aspect ratio inference** — Deteksi otomatis: dokumen ini A4? KTP? Kartu kredit? Invoice A5?
-  - A4 = 1:1.414
-  - KTP (Indonesia) = 1:1.588 (85.6mm × 53.98mm)
-  - Letter = 1:1.294
-  - Square (foto) = 1:1
-- [ ] **Content-aware boundary** — Jangan cuma warp ke aspect ratio, tapi crop ke content (remove excessive white margin tapi jangan crop teks)
-- [ ] **Skew correction post-warp** — Kalau dokumen miring sedikit (bukan perspective tapi rotation), rotate setelah warp. Text orientation detection via horizontal projection profile.
-- [ ] **Curved document handling (basic)** — Banyak dokumen agak melengkung (buku, receipt). Basic dewarp: detect text line flow → curve model → compensate. At minimum: warn user "Dokumen melengkung terdeteksi, hasil mungkin kurang optimal."
+- [x] **Perspective transform** — Dari 4 corner detected → warp ke rectangle A4/Letter/ID card aspect ratio dengan 20px pre-padding dan BORDER_CONSTANT white
+- [x] **Aspect ratio & Orientation inference** — Deteksi otomatis tipe dokumen dan orientasi (Portrait/Landscape):
+  - A4 = 1:1.414 (1240×1754 @ 150 DPI)
+  - KTP (Indonesia) = 1:1.588 (505×799 @ 150 DPI)
+  - F4 / Folio (Asia) = 1:1.535 (1270×1949 @ 150 DPI)
+  - Receipt = Dynamic clamped 2.0-5.0 (472×height max 5906px)
+  - Square (foto) = 1:1 (1200×1200)
+- [x] **Content-aware boundary** — Smart boundary trimming dengan minimum 10px safety margin dan 80% content area guard
+- [x] **Skew correction post-warp** — Conditional text deskew (-15° s/d +15°) via horizontal projection profile (skip KTP/Photo)
+- [x] **Curvature detection hint** — Deteksi kelengkungan teks (FLAT/MAYBE_CURVED/LIKELY_CURVED) sebagai warning geometris non-destruktif
+- [x] **Homography validation** — Memvalidasi determinan matriks homography sebelum warp untuk mencegah deformasi gambar ekstrem
 
-**Why P0:** User scan dokumen untuk hasil flat & square. Kalau warp-nya jelek, app gak berguna.
+#### 🟡 Nice to Have / Future Improvements (Perspective Warp & Deskew):
+- [ ] **Precompute homography di native & cache** — Re-warp dengan corner manual jadi < 50ms.
+- [ ] **Multi-page consistent DPI** — Semua halaman dalam satu PDF memakai DPI konsisten.
+- [ ] **Smart background color detection** — Auto-white balance target berdasarkan warna background meja/karpet.
+- [ ] **Shadow removal sebelum warp** — Menghilangkan bayangan di pojok kertas sebelum deteksi.
+- [ ] **Save warp matrix ke metadata** — Menyimpan homography matrix agar bisa di-re-warp kapan saja.
 
 ---
 

@@ -108,8 +108,31 @@ class ImageProcessor {
     private external fun nativeDeskew(bitmap: Bitmap): Bitmap
 
     private external fun nativeCalculateBlurScore(bitmap: Bitmap): Float
-
     private external fun nativeCalculateGlareRatio(bitmap: Bitmap): Float
 
+    data class DocInferenceResult(
+        val type: com.yatagami.data.model.DocumentType,
+        val isPortrait: Boolean,
+        val targetWidth: Int,
+        val targetHeight: Int
+    )
+
+    fun inferDocumentType(corners: FloatArray): DocInferenceResult {
+        val res = nativeInferDocumentType(corners)
+        val type = when (res.getOrNull(0) ?: 0) {
+            0 -> com.yatagami.data.model.DocumentType.A4
+            1 -> com.yatagami.data.model.DocumentType.KTP
+            2 -> com.yatagami.data.model.DocumentType.F4
+            3 -> com.yatagami.data.model.DocumentType.RECEIPT
+            4 -> com.yatagami.data.model.DocumentType.SQUARE
+            else -> com.yatagami.data.model.DocumentType.FREEFORM
+        }
+        val isPortrait = (res.getOrNull(1) ?: 1) == 1
+        val targetWidth = res.getOrNull(2) ?: 1240
+        val targetHeight = res.getOrNull(3) ?: 1754
+        return DocInferenceResult(type, isPortrait, targetWidth, targetHeight)
+    }
+
     private external fun nativeRecommendFilter(bitmap: Bitmap): Int
+    private external fun nativeInferDocumentType(corners: FloatArray): IntArray
 }

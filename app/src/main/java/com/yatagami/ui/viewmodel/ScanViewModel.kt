@@ -42,19 +42,16 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 corners, bitmap.width.toFloat(), bitmap.height.toFloat()
             )
 
-            // Adaptive resolution: 300 DPI (2480x3508) on normal, 200 DPI (1754x2480) on thermal throttling
-            val (dstW, dstH) = if (DevicePerformanceMonitor.isThermalThrottling.value) {
-                1754 to 2480
-            } else {
-                2480 to 3508
-            }
-
-            val warped = processor.warpPerspective(bitmap, corners, dstW, dstH)
+            // Intelligent 150 DPI aspect ratio and orientation inference
+            val docInfo = processor.inferDocumentType(corners)
+            val warped = processor.warpPerspective(bitmap, corners, docInfo.targetWidth, docInfo.targetHeight)
             val enhanced = processor.enhanceImage(warped, FilterMode.AUTO)
             val page = ScannedPage(
                 originalBitmap = bitmap,
                 croppedBitmap = warped,
                 filterMode = FilterMode.AUTO,
+                docType = docInfo.type,
+                isPortrait = docInfo.isPortrait,
                 processedBitmap = enhanced,
                 originalCorners = corners,
                 autoConfidence = confidence,
@@ -77,20 +74,17 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         if (idx == -1 || newCorners.size < 8) return false
         val page = pages[idx]
 
-        // Pre-validation: ensure minimum area and non-self-intersecting
-        val (dstW, dstH) = if (DevicePerformanceMonitor.isThermalThrottling.value) {
-            1754 to 2480
-        } else {
-            2480 to 3508
-        }
+        val docInfo = processor.inferDocumentType(newCorners)
 
         viewModelScope.launch {
             isProcessing.value = true
-            val warped = processor.warpPerspective(page.originalBitmap, newCorners, dstW, dstH)
+            val warped = processor.warpPerspective(page.originalBitmap, newCorners, docInfo.targetWidth, docInfo.targetHeight)
             val enhanced = processor.enhanceImage(warped, page.filterMode)
 
             page.manualCorners = newCorners
             page.isManuallyAdjusted = true
+            page.docType = docInfo.type
+            page.isPortrait = docInfo.isPortrait
             page.croppedBitmap?.recycle()
             page.processedBitmap?.recycle()
             page.croppedBitmap = warped

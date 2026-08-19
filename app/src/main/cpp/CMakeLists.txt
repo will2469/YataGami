@@ -16,8 +16,14 @@ add_library(
     core/scheduler.cpp
     core/preprocessing.cpp
     core/geometry.cpp
+    core/doc_classifier.cpp
+    core/text_deskew.cpp
     core/deskew.cpp
+    core/scene_analysis.cpp
+    core/enhancement_tiers.cpp
     core/enhancement.cpp
+    jni/detector_jni.cpp
+    jni/processor_jni.cpp
     yatagami.cpp
 )
 
@@ -34,5 +40,6 @@ target_link_libraries(
 include_directories(
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/core
+    ${CMAKE_SOURCE_DIR}/jni
     ${OpenCV_INCLUDE_DIRS}
 )

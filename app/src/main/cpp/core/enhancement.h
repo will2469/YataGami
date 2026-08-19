@@ -25,33 +25,6 @@ struct SceneAnalysis {
     bool hasGlare;
 };
 
-// Scene analysis & Auto-tier selection
-SceneAnalysis analyzeScene(const cv::Mat& bgr);
-EnhancementTier autoSelectTier(const SceneAnalysis& scene);
-
-// Native Thermal check
-bool isNativeThermalThrottling();
-
-// Metrics
-double calculateBlurScore(const cv::Mat& bgr);
-double calculateGlareRatio(const cv::Mat& bgr);
-int recommendFilterMode(const cv::Mat& bgr);
-
-// CLAHE in LAB L-channel helper
-void applyClaheToL(cv::Mat& labL, double clipLimit = 2.0, cv::Size tileSize = cv::Size(8, 8));
-
-// Fast edge-preserving surface blur (15-20ms)
-void fastEdgePreservingFilter(const cv::Mat& src, cv::Mat& dst, int radius = 5, float threshold = 30.0f);
-
-// Illumination estimation & flattening
-cv::Mat estimateIllumination(const cv::Mat& grayOrL, int blurRadius = 101);
-void flattenIllumination(const cv::Mat& src, cv::Mat& dst, const cv::Mat& illum, float strength = 0.8f);
-
-// Master Tier Enhancement Engines
-void enhanceTier1Fast(const cv::Mat& src, cv::Mat& dst);
-void enhanceTier2Standard(const cv::Mat& src, cv::Mat& dst);
-void enhanceTier3Quality(const cv::Mat& src, cv::Mat& dst);
-
 // Master Enhancement Engine (generates Master RGB)
 void generateMasterEnhanced(const cv::Mat& src, cv::Mat& dst, EnhancementTier tier = EnhancementTier::TIER_AUTO);
 

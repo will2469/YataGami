@@ -6,24 +6,20 @@
 ## 🔴 CRITICAL — Harus Diimplementasi Dulu
 
 ### 1. Pre-Processing Pipeline (Sebelum Deteksi Dokumen)
-- [ ] **Noise Reduction awal** — Bilateral filter atau Non-local Means sebelum Canny edge detection. Low-light foto = noise tinggi = contour salah deteksi.
-- [ ] **Auto-Contrast / CLAHE pre-processing** — Histogram equalization sebelum edge detection biar tepi dokumen keluar jelas walau cahaya kurang.
-- [ ] **Gamma Correction dinamis** — Deteksi kecerahan gambar (mean intensity), terus apply gamma < 1 kalau gelap, gamma > 1 kalau terlalu terang.
-- [ ] **Shadow Removal** — Morphological closing / inpainting untuk ilangin bayangan di dokumen. Bayangan = adaptive threshold jadi rusak.
+- [x] **Noise Reduction awal** — Bilateral filter sebelum Canny edge detection. Menghilangkan noise sensor kamera terutama low-light sambil menjaga tepi dokumen tetap tajam.
+- [x] **Auto-Contrast / CLAHE pre-processing** — Contrast-Limited Adaptive Histogram Equalization sebelum edge detection agar tepi dokumen keluar kontras walau cahaya redup.
+- [x] **Gamma Correction dinamis** — Deteksi kecerahan gambar (mean intensity) dan koreksi gamma dinamis via LUT (gamma < 1 kalau gelap, gamma > 1 kalau overexposed).
+- [x] **Shadow Removal** — Morphological background estimation & difference normalization untuk menghilangkan bayangan tangan/objek pada kertas.
 
 ### 2. Angle Detection & Deskewing (Rotasi Teks)
-- [ ] **Text-based Skew Detection** — Hough Transform atau projection profile untuk deteksi sudut rotasi teks. Saat ini cuma perspective warp, belum handle dokumen miring (rotated).
-- [ ] **Auto-rotate ke 0°** — Kalau skew angle > 2°, rotate dulu sebelum warpPerspective.
-- [ ] **Orientation Classification** — Deteksi apakah dokumen portrait/landscape berdasarkan aspect ratio konten, bukan cuma aspect ratio gambar.
+- [x] **Text-based Skew Detection** — Analisis garis teks horizontal morfologis + `cv::minAreaRect` untuk mendeteksi sudut kemiringan teks secara presisi (rentang -25° hingga +25°).
+- [x] **Auto-rotate ke 0°** — Otomatis rotasi affine balikan (`deskewImage`) jika skew angle >= 0.5° sehingga baris teks sejajar horizontal 0° setelah warp perspective.
+- [x] **Orientation Classification** — Analisis densitas gradien Sobel (`autoFixOrientation`) untuk otomatis memutar dokumen 90° jika posisi gambar/teks tertidur dalam wadah portrait.
 
 ### 3. Smart Filter Selection (Auto-Enhance)
-- [ ] **Blur Detection (Laplacian Variance)** — Sebelum proses, cek cv::Laplacian variance. Kalau < threshold, warning user "dokumen blur, silakan foto ulang".
-- [ ] **Glare / Overexposure Detection** — Cek piksel > 250 di area putih. Kalau > 30% area dokumen = glare, apply inpainting atau tone mapping.
-- [ ] **Auto-filter recommendation** — Analisis gambar otomatis pilih filter terbaik:
-  - Teks kecil + kontras rendah → Sharpen + Magic Color
-  - Low-light + noise tinggi → Bilateral + CLAHE
-  - Teks cetak bersih → Adaptive Threshold (B&W)
-  - Foto/berwarna → White Balance + mild Sharpen
+- [x] **Blur Detection (Laplacian Variance)** — Menghitung varians operator Laplacian (`calculateBlurScore`). Peringatan otomatis pada UI FilterScreen jika skor < 85 ("dokumen agak buram").
+- [x] **Glare / Overexposure Detection** — Deteksi rasio piksel jenuh > 250 (`calculateGlareRatio`) & kompresi highlight specular glare (`suppressGlare`) pada kanal luminansi Lab.
+- [x] **Auto-filter recommendation** — Analisis otomatis karakteristik citra (`recommendFilterMode` berbasis chroma dispersion, bimodal white ratio, dan mean luminance) untuk memilih filter optimal secara cerdas (`FilterMode.AUTO`).
 
 ---
 

@@ -1,0 +1,104 @@
+#include "geometry.h"
+#include "preprocessing.h"
+#include <algorithm>
+
+namespace yatagami {
+
+std::vector<cv::Point2f> orderQuadCorners(const std::vector<cv::Point2f>& pts) {
+    if (pts.size() != 4) return pts;
+
+    std::vector<cv::Point2f> ordered(4);
+    std::vector<float> sums(4), diffs(4);
+    for (int i = 0; i < 4; ++i) {
+        sums[i] = pts[i].x + pts[i].y;
+        diffs[i] = pts[i].x - pts[i].y;
+    }
+
+    int tlIdx = static_cast<int>(std::min_element(sums.begin(), sums.end()) - sums.begin());
+    int brIdx = static_cast<int>(std::max_element(sums.begin(), sums.end()) - sums.begin());
+    int trIdx = static_cast<int>(std::max_element(diffs.begin(), diffs.end()) - diffs.begin());
+    int blIdx = static_cast<int>(std::min_element(diffs.begin(), diffs.end()) - diffs.begin());
+
+    ordered[0] = pts[tlIdx];
+    ordered[1] = pts[trIdx];
+    ordered[2] = pts[brIdx];
+    ordered[3] = pts[blIdx];
+    return ordered;
+}
+
+std::vector<cv::Point2f> detectDocumentCorners(const cv::Mat& img) {
+    float maxDim = 640.0f;
+    float scale = 1.0f;
+    cv::Mat processImg;
+    if (std::max(img.cols, img.rows) > maxDim) {
+        scale = maxDim / static_cast<float>(std::max(img.cols, img.rows));
+        cv::resize(img, processImg, cv::Size(), scale, scale, cv::INTER_AREA);
+    } else {
+        processImg = img;
+    }
+
+    cv::Mat preprocessed = preprocessForDetection(processImg);
+
+    cv::Mat dummy;
+    double highThresh = cv::threshold(preprocessed, dummy, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    double lowThresh = std::max(20.0, 0.4 * highThresh);
+    highThresh = std::min(220.0, std::max(70.0, highThresh));
+
+    cv::Mat edges;
+    cv::Canny(preprocessed, edges, lowThresh, highThresh);
+
+    cv::Mat morphKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+    cv::morphologyEx(edges, edges, cv::MORPH_CLOSE, morphKernel);
+
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(edges, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+    std::sort(contours.begin(), contours.end(),
+        [](const auto &a, const auto &b) {
+            return cv::contourArea(a) > cv::contourArea(b);
+        });
+
+    float imgArea = static_cast<float>(processImg.rows * processImg.cols);
+    std::vector<cv::Point2f> docCorners;
+
+    for (const auto &contour : contours) {
+        double perimeter = cv::arcLength(contour, true);
+        std::vector<cv::Point> approx;
+        cv::approxPolyDP(contour, approx, 0.02 * perimeter, true);
+
+        if (approx.size() == 4 && cv::isContourConvex(approx)) {
+            float area = static_cast<float>(cv::contourArea(approx));
+            if (area > imgArea * 0.12f) {
+                for (const auto &p : approx) {
+                    docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
+                }
+                break;
+            }
+        }
+    }
+
+    if (docCorners.size() == 4) {
+        docCorners = orderQuadCorners(docCorners);
+
+        cv::Mat grayProcess;
+        cv::cvtColor(processImg, grayProcess, cv::COLOR_BGR2GRAY);
+        cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.05);
+        cv::cornerSubPix(grayProcess, docCorners, cv::Size(5, 5), cv::Size(-1, -1), criteria);
+
+        for (auto &pt : docCorners) {
+            pt.x = std::clamp(pt.x / scale, 0.0f, static_cast<float>(img.cols - 1));
+            pt.y = std::clamp(pt.y / scale, 0.0f, static_cast<float>(img.rows - 1));
+        }
+    } else {
+        docCorners = {
+            {0.0f, 0.0f},
+            {static_cast<float>(img.cols - 1), 0.0f},
+            {static_cast<float>(img.cols - 1), static_cast<float>(img.rows - 1)},
+            {0.0f, static_cast<float>(img.rows - 1)}
+        };
+    }
+
+    return docCorners;
+}
+
+} // namespace yatagami

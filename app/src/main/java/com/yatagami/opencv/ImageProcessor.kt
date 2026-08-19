@@ -21,8 +21,39 @@ class ImageProcessor {
             FilterMode.BLACK_WHITE -> 2
             FilterMode.MAGIC_COLOR -> 3
             FilterMode.SHARPEN -> 4
+            FilterMode.AUTO -> 5
         }
         nativeEnhanceImage(src, modeInt)
+    }
+
+    suspend fun detectSkewAngle(src: Bitmap): Float = withContext(Dispatchers.Default) {
+        nativeDetectSkewAngle(src)
+    }
+
+    suspend fun deskewImage(src: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+        nativeDeskew(src)
+    }
+
+    suspend fun calculateBlurScore(src: Bitmap): Float = withContext(Dispatchers.Default) {
+        nativeCalculateBlurScore(src)
+    }
+
+    suspend fun isBlurry(src: Bitmap, threshold: Float = 90.0f): Boolean = withContext(Dispatchers.Default) {
+        nativeCalculateBlurScore(src) < threshold
+    }
+
+    suspend fun calculateGlareRatio(src: Bitmap): Float = withContext(Dispatchers.Default) {
+        nativeCalculateGlareRatio(src)
+    }
+
+    suspend fun recommendFilter(src: Bitmap): FilterMode = withContext(Dispatchers.Default) {
+        when (nativeRecommendFilter(src)) {
+            1 -> FilterMode.GRAYSCALE
+            2 -> FilterMode.BLACK_WHITE
+            3 -> FilterMode.MAGIC_COLOR
+            4 -> FilterMode.SHARPEN
+            else -> FilterMode.NONE
+        }
     }
 
     private external fun nativeWarpPerspective(
@@ -30,4 +61,14 @@ class ImageProcessor {
     ): Bitmap
 
     private external fun nativeEnhanceImage(bitmap: Bitmap, mode: Int): Bitmap
+
+    private external fun nativeDetectSkewAngle(bitmap: Bitmap): Float
+
+    private external fun nativeDeskew(bitmap: Bitmap): Bitmap
+
+    private external fun nativeCalculateBlurScore(bitmap: Bitmap): Float
+
+    private external fun nativeCalculateGlareRatio(bitmap: Bitmap): Float
+
+    private external fun nativeRecommendFilter(bitmap: Bitmap): Int
 }

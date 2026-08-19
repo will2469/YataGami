@@ -10,6 +10,11 @@ find_package(OpenCV REQUIRED)
 add_library(
     yatagami
     SHARED
+    core/common.cpp
+    core/preprocessing.cpp
+    core/geometry.cpp
+    core/deskew.cpp
+    core/enhancement.cpp
     yatagami.cpp
 )
 
@@ -23,4 +28,8 @@ target_link_libraries(
     ${log-lib}
 )
 
-include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/core
+    ${OpenCV_INCLUDE_DIRS}
+)

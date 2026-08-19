@@ -111,23 +111,26 @@ Ini JANTUNG aplikasi. Semua optimasi C++ sia-sia kalau deteksi dokumen-nya gagal
 ---
 
 ### 4. Scanning UX Flow (The Capture Experience)
-**Status: ❌ Belum dibahas sama sekali**
+**Status: ✅ Selesai Diimplementasikan (Decoupled 3 Streams 720p Analysis, Adaptive EMA, 5-Frame Cancelable Auto-Capture, Document Frame Guide, Background Queue)**
 
-- [ ] **Real-time document overlay** — Di preview, gambar quad hijau (atau biru) yang ngikutin dokumen. Corner dots bisa di-drag kalau auto gagal.
-- [ ] **Auto-capture trigger** — Kalau:
-  - Quad stabil (3 frame, confidence > 0.85)
-  - Sharpness tinggi (Laplacian variance > threshold)
-  - Exposure lock aktif
-  - Hand steady (gyroscope < threshold)
-  → Auto capture dengan countdown 0.5 detik (flash overlay + sound)
-- [ ] **Manual capture button** — Selalu tersedia. Long-press = burst mode.
-- [ ] **Batch scan flow** — Setelah capture halaman 1, langsung kembali ke preview untuk halaman 2. Counter "Halaman 3" di UI. Swipe untuk review halaman sebelumnya.
-- [ ] **Retake mechanism** — Setelah capture, preview thumbnail kecil di pojok. Tap untuk retake. Swipe thumbnail untuk lihat halaman lain.
-- [ ] **Document type quick selector** — Bottom sheet/chip: A4, KTP, Kartu, Invoice, Receipt, Foto. Ini mempengaruhi aspect ratio warp & processing.
-- [ ] **Flash/torch toggle** — Penting untuk low light. Tecno Pova 7 punya dual LED, torch cukup terang.
-- [ ] **Grid overlay option** — Rule of thirds / document alignment guide.
+- [x] **Decoupled Camera Streams** — Preview 30 FPS (720p), ImageAnalysis 10-15 FPS (720p), ImageCapture 12MP (MINIMIZE_LATENCY).
+- [x] **Adaptive EMA Smoothing** — Velocity-aware alpha (0.25 - 0.55) untuk corner tracking yang responsif namun halus.
+- [x] **5-Frame Multi-Factor Stability & Cancelable Countdown** — 5 frame stabil berturut-turut + hitung mundur 500ms yang dapat dibatalkan jika ada pergerakan.
+- [x] **Document Alignment Frame & Level Indicator** — Panduan bingkai dokumen 85% dan indikator kerataan orientasi accelerometer.
+- [x] **Document Type Presets** — A4, KTP, F4, Struk, Foto yang langsung mempengaruhi aspect ratio prioritas dan target resolusi warp.
+- [x] **Torch Tri-State (Off / Auto / On)** — Kontrol pencahayaan LED ganda untuk kondisi cahaya rendah.
+- [x] **Background Processing Queue** — Pemrosesan warp & enhance berjalan di background coroutine queue tanpa memblokir viewfinder kamera (true batch scan).
+- [x] **Subtle Shutter Flash (30% opacity, 50ms) + Haptic Feedback** — Umpan balik visual yang nyaman tanpa menyilaukan mata.
 
-**Why P0:** UX scan adalah 80% pengalaman user. Kalau gak enak dipake, native optimization gak ada artinya.
+#### 🟡 Nice to Have / Future Improvements (Scanning UX Flow):
+- [ ] **"Scanning guide" voice/text hint** — "Dekatkan dokumen", "Terlalu gelap", "Goyang".
+- [ ] **Smart zoom (pinch) untuk dokumen jauh** — Digital zoom ringan dengan detektor tetap aktif.
+- [ ] **Double-tap shutter = burst 3 frame** — Memilih frame tertajam untuk kondisi low-light.
+- [ ] **Long-press shutter = hold for continuous** — Pindai batch super cepat (receipts, tumpukan kartu).
+- [ ] **"Last page" undo gesture** — Shake HP atau 3-finger tap untuk retake halaman terakhir tanpa navigasi.
+- [ ] **Auto document type dari first frame** — Mendeteksi rasio sebelum user memilih chip.
+- [ ] **Preview quality indicator** — Indikator status lingkungan: 🌙 (low light), ⚡ (glare), ✓ (optimal).
+- [ ] **Screen wake lock selama scan** — Mencegah layar mati otomatis saat user merapikan dokumen fisik.
 
 ---
 

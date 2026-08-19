@@ -1,32 +1,145 @@
 package com.yatagami.ui.components
 
+import android.graphics.PointF
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
-fun DocumentOverlay(corners: List<android.graphics.PointF>) {
-    if (corners.size != 4) return
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val pts = corners.map { Offset(it.x * size.width, it.y * size.height) }
-        val path = Path().apply {
-            moveTo(pts[0].x, pts[0].y)
-            lineTo(pts[1].x, pts[1].y)
-            lineTo(pts[2].x, pts[2].y)
-            lineTo(pts[3].x, pts[3].y)
-            close()
-        }
-        drawPath(path, color = Color.Transparent)
-        drawPath(path, color = Color.Green, style = Stroke(width = 3.dp.toPx()))
+fun DocumentOverlay(
+    corners: List<PointF>,
+    isStable: Boolean = false,
+    confidence: Float = 0f,
+    showAlignmentGuide: Boolean = true,
+    isLevel: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val canvasW = size.width
+            val canvasH = size.height
 
-        pts.forEach {
-            drawCircle(Color.Red, radius = 12.dp.toPx(), center = it)
+            // 1. Document Frame Alignment Guide (85% of screen area)
+            if (showAlignmentGuide) {
+                val frameW = canvasW * 0.86f
+                val frameH = canvasH * 0.72f
+                val left = (canvasW - frameW) / 2f
+                val top = (canvasH - frameH) / 2f
+                val framePath = Path().apply {
+                    addRoundRect(
+                        androidx.compose.ui.geometry.RoundRect(
+                            left = left,
+                            top = top,
+                            right = left + frameW,
+                            bottom = top + frameH,
+                            radiusX = 16.dp.toPx(),
+                            radiusY = 16.dp.toPx()
+                        )
+                    )
+                }
+                drawPath(
+                    framePath,
+                    color = Color.White.copy(alpha = 0.20f),
+                    style = Stroke(width = 1.5.dp.toPx())
+                )
+            }
+
+            // 2. Real-time Neon Document Contour Polygon
+            if (corners.size == 4 && confidence >= 0.40f) {
+                val pts = corners.map { Offset(it.x * canvasW, it.y * canvasH) }
+                val mainColor = if (isStable && confidence >= 0.75f) {
+                    Color(0xFF00E676) // Neon Green
+                } else {
+                    Color(0xFFFFD600) // Amber Yellow
+                }
+
+                val polyPath = Path().apply {
+                    moveTo(pts[0].x, pts[0].y)
+                    lineTo(pts[1].x, pts[1].y)
+                    lineTo(pts[2].x, pts[2].y)
+                    lineTo(pts[3].x, pts[3].y)
+                    close()
+                }
+
+                // Semi-transparent interior fill
+                drawPath(
+                    polyPath,
+                    color = mainColor.copy(alpha = if (isStable) 0.15f else 0.08f)
+                )
+
+                // Outer border stroke
+                drawPath(
+                    polyPath,
+                    color = mainColor,
+                    style = Stroke(width = if (isStable) 3.dp.toPx() else 2.dp.toPx())
+                )
+
+                // 3. Edge-Oriented L-Bracket Corner Accents
+                val bracketLen = 22.dp.toPx()
+                for (i in 0 until 4) {
+                    val pCurr = pts[i]
+                    val pPrev = pts[(i + 3) % 4]
+                    val pNext = pts[(i + 1) % 4]
+
+                    val anglePrev = atan2((pPrev.y - pCurr.y).toDouble(), (pPrev.x - pCurr.x).toDouble()).toFloat()
+                    val angleNext = atan2((pNext.y - pCurr.y).toDouble(), (pNext.x - pCurr.x).toDouble()).toFloat()
+
+                    val armPrev = Offset(
+                        pCurr.x + bracketLen * cos(anglePrev),
+                        pCurr.y + bracketLen * sin(anglePrev)
+                    )
+                    val armNext = Offset(
+                        pCurr.x + bracketLen * cos(angleNext),
+                        pCurr.y + bracketLen * sin(angleNext)
+                    )
+
+                    drawLine(
+                        color = Color.White,
+                        start = pCurr,
+                        end = armPrev,
+                        strokeWidth = 4.dp.toPx()
+                    )
+                    drawLine(
+                        color = Color.White,
+                        start = pCurr,
+                        end = armNext,
+                        strokeWidth = 4.dp.toPx()
+                    )
+                    drawCircle(
+                        color = mainColor,
+                        radius = 4.dp.toPx(),
+                        center = pCurr
+                    )
+                }
+            }
+        }
+
+        // 4. Orientation Level Indicator
+        if (showAlignmentGuide) {
+            Icon(
+                imageVector = if (isLevel) Icons.Default.Check else Icons.Default.Warning,
+                contentDescription = null,
+                tint = if (isLevel) Color(0xFF00E676) else Color(0xFFFFD600),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp)
+            )
         }
     }
 }

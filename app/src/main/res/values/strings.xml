@@ -1,4 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">YataGami</string>
+
+    <!-- Export & Share UI Strings -->
+    <string name="export_dialog_title">Ekspor &amp; Bagikan Dokumen</string>
+    <string name="export_tab_pdf">PDF Dokumen</string>
+    <string name="export_tab_images">Gambar (JPG/PNG)</string>
+    <string name="export_pages_section">Pilihan Halaman</string>
+    <string name="export_all_pages">Semua Halaman (%1$d hal)</string>
+    <string name="export_selected_pages">Pilih Halaman Tertentu</string>
+    <string name="export_filename_label">Nama Berkas</string>
+    <string name="export_compression_title">Tingkat Kompresi PDF</string>
+    <string name="export_compression_min">Ukuran Minimum</string>
+    <string name="export_compression_min_desc">100 DPI (~100-200 KB/hal)</string>
+    <string name="export_compression_std">Standar (Rekomendasi)</string>
+    <string name="export_compression_std_desc">150 DPI (~300-500 KB/hal)</string>
+    <string name="export_compression_high">Kualitas Tinggi / Arsip</string>
+    <string name="export_compression_high_desc">300 DPI (~1-2 MB/hal)</string>
+
+    <string name="export_format_title">Format &amp; Kualitas Gambar</string>
+    <string name="export_format_jpg_80">JPG Kompresi (80%)</string>
+    <string name="export_format_jpg_90">JPG Standar (90%)</string>
+    <string name="export_format_jpg_100">JPG Maksimal (100%)</string>
+    <string name="export_format_png">PNG Lossless (Arsip)</string>
+
+    <string name="export_action_save">Simpan ke Perangkat</string>
+    <string name="export_action_share">Bagikan Langsung</string>
+    <string name="export_processing">Memproses dokumen…</string>
+    <string name="export_no_pages_selected">Pilih minimal 1 halaman untuk diekspor</string>
+    <string name="export_share_chooser_title">Bagikan Dokumen YataGami</string>
+    <string name="export_share_no_app">Tidak ada aplikasi yang dapat membuka berkas ini</string>
 </resources>

@@ -46,28 +46,31 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.yatagami.ui.components.review.BeforeAfterComparisonView
+import com.yatagami.ui.components.review.ExportModalBottomSheet
 import com.yatagami.ui.components.review.ExportSuccessDialog
 import com.yatagami.ui.components.review.FilterModeChips
 import com.yatagami.ui.components.review.PageActionToolbar
-import com.yatagami.ui.components.review.SavePdfDialog
 import com.yatagami.ui.components.review.ThumbnailStrip
 import com.yatagami.ui.viewmodel.ScanEvent
 import com.yatagami.ui.viewmodel.ScanViewModel
+import com.yatagami.utils.ShareHelper
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PageListScreen(navController: NavController, viewModel: ScanViewModel) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val pages = viewModel.pages
 
-    var showTitleDialog by remember { mutableStateOf(false) }
+    var showExportBottomSheet by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     var showHiOsDialog by remember { mutableStateOf(false) }
     var successMessage by remember { mutableStateOf("") }
@@ -87,12 +90,15 @@ fun PageListScreen(navController: NavController, viewModel: ScanViewModel) {
         viewModel.events.collectLatest { event ->
             when (event) {
                 is ScanEvent.PdfSaved -> {
-                    successMessage = "PDF tersimpan di:\n${event.path}"
+                    successMessage = "PDF berhasil disimpan di:\n${event.path}"
                     showSuccessDialog = true
                 }
                 is ScanEvent.ImagesSaved -> {
                     successMessage = "${event.count} gambar berhasil disimpan ke Galeri (Pictures/YataGami)!"
                     showSuccessDialog = true
+                }
+                is ScanEvent.SharePayloadReady -> {
+                    ShareHelper.sharePayload(context, event.payload)
                 }
                 is ScanEvent.Error -> {
                     snackbarHostState.showSnackbar("Error: ${event.message}")
@@ -123,8 +129,8 @@ fun PageListScreen(navController: NavController, viewModel: ScanViewModel) {
                     IconButton(onClick = { showHiOsDialog = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Optimasi HiOS")
                     }
-                    IconButton(onClick = { showTitleDialog = true }) {
-                        Icon(Icons.Default.Share, contentDescription = "Simpan PDF")
+                    IconButton(onClick = { showExportBottomSheet = true }) {
+                        Icon(Icons.Default.Share, contentDescription = "Ekspor & Bagikan")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -271,17 +277,25 @@ fun PageListScreen(navController: NavController, viewModel: ScanViewModel) {
         }
     }
 
-    // Dialogs
-    if (showTitleDialog) {
-        SavePdfDialog(
-            title = viewModel.currentTitle.value,
-            onTitleChange = { viewModel.currentTitle.value = it },
-            pageCount = pages.size,
-            onConfirm = {
-                showTitleDialog = false
-                viewModel.savePdf()
+    // Modal Bottom Sheet untuk Ekspor & Sharing
+    if (showExportBottomSheet) {
+        ExportModalBottomSheet(
+            pages = pages,
+            initialTitle = viewModel.currentTitle.value.ifBlank { viewModel.generateSuggestedTitle() },
+            isProcessing = viewModel.isProcessing.value,
+            onDismiss = { showExportBottomSheet = false },
+            onSavePdf = { selectedIds, compressionTier, title ->
+                viewModel.exportPdf(selectedIds, compressionTier, title)
             },
-            onDismiss = { showTitleDialog = false }
+            onSharePdf = { selectedIds, compressionTier, title ->
+                viewModel.sharePdf(selectedIds, compressionTier, title)
+            },
+            onSaveImages = { selectedIds, format, title ->
+                viewModel.exportImages(selectedIds, format, title)
+            },
+            onShareImages = { selectedIds, format, title ->
+                viewModel.shareImages(selectedIds, format, title)
+            }
         )
     }
 

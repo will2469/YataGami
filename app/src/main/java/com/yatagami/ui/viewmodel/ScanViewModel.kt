@@ -7,11 +7,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.yatagami.data.model.FilterMode
+import com.yatagami.data.model.ImageExportFormat
+import com.yatagami.data.model.PdfCompressionTier
 import com.yatagami.data.model.ScannedPage
+import com.yatagami.data.model.SharePayload
 import com.yatagami.data.repository.ScanRepository
 import com.yatagami.data.session.DocumentSession
 import com.yatagami.data.session.DocumentSessionManager
-import com.yatagami.data.session.SessionStatus
 import com.yatagami.opencv.DocumentDetector
 import com.yatagami.opencv.ImageProcessor
 import com.yatagami.utils.DevicePerformanceMonitor
@@ -261,30 +263,145 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
-    fun savePdf() {
+    fun generateSuggestedTitle(): String {
+        return repository.generateDefaultDocumentTitle(pages)
+    }
+
+    fun exportPdf(
+        selectedPageIds: Set<String>? = null,
+        compressionTier: PdfCompressionTier = PdfCompressionTier.STANDARD,
+        customTitle: String = ""
+    ) {
         viewModelScope.launch {
+            val targetPages = if (selectedPageIds.isNullOrEmpty()) {
+                pages.toList()
+            } else {
+                pages.filter { it.id in selectedPageIds }
+            }
+            if (targetPages.isEmpty()) {
+                _events.emit(ScanEvent.Error("Pilih minimal 1 halaman untuk diekspor"))
+                return@launch
+            }
+
             isProcessing.value = true
-            val result = repository.savePdf(pages, currentTitle.value.ifEmpty { "Document" })
+            val titleToUse = customTitle.ifBlank { generateSuggestedTitle() }
+            val result = repository.savePdf(targetPages, titleToUse, compressionTier = compressionTier)
             isProcessing.value = false
+
             if (result.isSuccess) {
                 sessionManager.clearSession(currentSession.sessionId)
                 currentSession = sessionManager.createNewSession()
                 _events.emit(ScanEvent.PdfSaved(result.getOrThrow()))
             } else {
-                _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Unknown error"))
+                _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyimpan PDF"))
             }
         }
     }
 
-    fun saveAsImages() {
+    fun sharePdf(
+        selectedPageIds: Set<String>? = null,
+        compressionTier: PdfCompressionTier = PdfCompressionTier.STANDARD,
+        customTitle: String = ""
+    ) {
         viewModelScope.launch {
+            val targetPages = if (selectedPageIds.isNullOrEmpty()) {
+                pages.toList()
+            } else {
+                pages.filter { it.id in selectedPageIds }
+            }
+            if (targetPages.isEmpty()) {
+                _events.emit(ScanEvent.Error("Pilih minimal 1 halaman untuk dibagikan"))
+                return@launch
+            }
+
             isProcessing.value = true
-            val result = repository.saveImagesToGallery(pages)
+            val titleToUse = customTitle.ifBlank { generateSuggestedTitle() }
+            val result = repository.createTempPdfForShare(targetPages, titleToUse, compressionTier)
             isProcessing.value = false
+
             if (result.isSuccess) {
-                _events.emit(ScanEvent.ImagesSaved(result.getOrThrow().size, result.getOrThrow()))
+                val uri = result.getOrThrow()
+                _events.emit(
+                    ScanEvent.SharePayloadReady(
+                        SharePayload(
+                            uris = listOf(uri),
+                            mimeType = "application/pdf",
+                            title = titleToUse,
+                            isMultiple = false
+                        )
+                    )
+                )
+            } else {
+                _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyiapkan file PDF"))
+            }
+        }
+    }
+
+    fun exportImages(
+        selectedPageIds: Set<String>? = null,
+        format: ImageExportFormat = ImageExportFormat.JPG_90,
+        customTitle: String? = null
+    ) {
+        viewModelScope.launch {
+            val targetPages = if (selectedPageIds.isNullOrEmpty()) {
+                pages.toList()
+            } else {
+                pages.filter { it.id in selectedPageIds }
+            }
+            if (targetPages.isEmpty()) {
+                _events.emit(ScanEvent.Error("Pilih minimal 1 halaman untuk disimpan"))
+                return@launch
+            }
+
+            isProcessing.value = true
+            val titleToUse = customTitle?.ifBlank { null } ?: generateSuggestedTitle()
+            val result = repository.saveImagesToGallery(targetPages, format, titleToUse)
+            isProcessing.value = false
+
+            if (result.isSuccess) {
+                val savedList = result.getOrThrow()
+                _events.emit(ScanEvent.ImagesSaved(savedList.size, savedList))
             } else {
                 _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyimpan gambar"))
+            }
+        }
+    }
+
+    fun shareImages(
+        selectedPageIds: Set<String>? = null,
+        format: ImageExportFormat = ImageExportFormat.JPG_90,
+        customTitle: String? = null
+    ) {
+        viewModelScope.launch {
+            val targetPages = if (selectedPageIds.isNullOrEmpty()) {
+                pages.toList()
+            } else {
+                pages.filter { it.id in selectedPageIds }
+            }
+            if (targetPages.isEmpty()) {
+                _events.emit(ScanEvent.Error("Pilih minimal 1 halaman untuk dibagikan"))
+                return@launch
+            }
+
+            isProcessing.value = true
+            val titleToUse = customTitle?.ifBlank { null } ?: generateSuggestedTitle()
+            val result = repository.createTempImagesForShare(targetPages, titleToUse, format)
+            isProcessing.value = false
+
+            if (result.isSuccess) {
+                val uris = result.getOrThrow()
+                _events.emit(
+                    ScanEvent.SharePayloadReady(
+                        SharePayload(
+                            uris = uris,
+                            mimeType = format.mimeType,
+                            title = titleToUse,
+                            isMultiple = uris.size > 1
+                        )
+                    )
+                )
+            } else {
+                _events.emit(ScanEvent.Error(result.exceptionOrNull()?.message ?: "Gagal menyiapkan gambar"))
             }
         }
     }
@@ -299,5 +416,6 @@ sealed class ScanEvent {
     data class PageAdded(val pageId: String) : ScanEvent()
     data class PdfSaved(val path: String) : ScanEvent()
     data class ImagesSaved(val count: Int, val paths: List<String>) : ScanEvent()
+    data class SharePayloadReady(val payload: SharePayload) : ScanEvent()
     data class Error(val message: String) : ScanEvent()
 }

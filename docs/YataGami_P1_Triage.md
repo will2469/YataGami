@@ -32,28 +32,28 @@ graph TD
 > **Target:** Memberikan fleksibilitas ekspor penuh agar dokumen hasil pemindaian multi-halaman dapat dibagikan, dikompresi, dienkripsi, atau dicetak ke perangkat fisik.
 
 ### 📦 Deliverables & Detail Teknis:
-1. **Native Android Sharesheet Integration (Android 15 Compliant)**
+1. [x] **Native Android Sharesheet Integration (Android 15 Compliant & ClipData Fixed)**
    - Ekspor instan ke WhatsApp, Telegram, Gmail, Google Drive, Bluetooth via `Intent.ACTION_SEND` (single file) & `Intent.ACTION_SEND_MULTIPLE` (multi-page/images).
-   - Penggunaan `FileProvider` dengan flag ketat `FLAG_GRANT_READ_URI_PERMISSION` (Safer Intents Android 15).
-2. **Selective / Partial Page Sharing**
-   - Opsi membagikan hanya halaman tertentu (misal: "Halaman 1 saja" atau "Halaman 1-3") tanpa harus mengekspor seluruh dokumen PDF.
-3. **Export as Single Images (JPG & PNG Lossless)**
+   - Penggunaan `FileProvider` + `ClipData` multi-item eksplisit dengan flag ketat `FLAG_GRANT_READ_URI_PERMISSION`.
+2. [x] **Selective / Partial Page Sharing**
+   - Opsi membagikan atau menyimpan hanya halaman tertentu via multi-select visual thumbnail picker di `ExportModalBottomSheet`.
+3. [x] **Export as Single Images (JPG & PNG Lossless)**
    - Pilihan format simpan per halaman:
      - JPEG Quality Selector: 80% (Ringan), 90% (Standar), 100% (Maksimal).
      - PNG Lossless (Ideal untuk dokumen teks tajam & arsip digital).
-   - Penyimpanan teratur ke MediaStore `Pictures/YataGami/`.
-4. **Export as ZIP Archive**
+   - Penyimpanan teratur ke MediaStore `Pictures/YataGami/` dengan perlindungan `IS_PENDING`.
+4. [ ] **Export as ZIP Archive**
    - Mengompres seluruh halaman gambar beresolusi penuh menjadi satu file `.zip` terstruktur dalam satu klik.
-5. **Android Print Framework Integration**
+5. [ ] **Android Print Framework Integration**
    - Mendukung pencetakan langsung dari aplikasi ke printer WiFi / Bluetooth via custom `PrintDocumentAdapter` bawaan Android.
-6. **Tiered PDF Compression Selector**
-   - **Minimum Size** (~100-200 KB/halaman, JPEG Q=65, 100 DPI, kompresi stream FlateDecode)
+6. [x] **Tiered PDF Compression Selector**
+   - **Minimum Size** (~100-200 KB/halaman, JPEG Q=65, 100 DPI)
    - **Standard (Rekomendasi)** (~300-500 KB/halaman, JPEG Q=85, 150 DPI)
    - **High Quality / Archive** (~1-2 MB/halaman, JPEG Q=95, 300 DPI)
-7. **PDF/A Standard Metadata Intelligence**
-   - Template penamaan otomatis: `Scan_YYYYMMDD_HHMMSS_[DocType].pdf` (contoh: `Scan_20260820_143022_KTP.pdf`).
-   - Penulisan metadata PDF resmi: `Title`, `Author` (YataGami), `CreationDate`, `Subject`, dan `Producer`.
-8. **PDF Password Protection & Encryption (Opsional)**
+7. [x] **PDF Metadata Intelligence & Filename Sanitization**
+   - Template penamaan otomatis: `Scan_YYYYMMDD_HHMMSS_[DocType].pdf` (contoh: `Scan_20260820_143022_KTP.pdf`) dengan regex sanitization `[^a-zA-Z0-9_\-]`.
+   - Penulisan metadata PDF resmi: `Title`, `Author` (YataGami), `Creator`, `CreationDate`, `Subject`, dan `Producer`.
+8. [ ] **PDF Password Protection & Encryption (Opsional)**
    - Enkripsi PDF standar (Standard 128-bit / 256-bit AES) dengan dialog set password untuk dokumen privat (KTP, slip gaji, kontrak).
 
 ---

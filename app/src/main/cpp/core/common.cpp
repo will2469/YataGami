@@ -20,6 +20,48 @@ bool bitmapToMat(JNIEnv *env, jobject bitmap, cv::Mat &outMat) {
     return false;
 }
 
+bool bitmapToMatWrap(JNIEnv *env, jobject bitmap, cv::Mat &outMat, void **outPixels) {
+    AndroidBitmapInfo info;
+    void *pixels = nullptr;
+
+    if (AndroidBitmap_getInfo(env, bitmap, &info) < 0) return false;
+    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) < 0) return false;
+
+    if (info.format == ANDROID_BITMAP_FORMAT_RGBA_8888) {
+        outMat = cv::Mat(info.height, info.width, CV_8UC4, pixels, info.stride);
+        if (outPixels) *outPixels = pixels;
+        return true;
+    }
+
+    AndroidBitmap_unlockPixels(env, bitmap);
+    return false;
+}
+
+bool matToBitmapDirect(JNIEnv *env, const cv::Mat &mat, jobject dstBitmap) {
+    AndroidBitmapInfo info;
+    void *pixels = nullptr;
+
+    if (AndroidBitmap_getInfo(env, dstBitmap, &info) < 0) return false;
+    if (AndroidBitmap_lockPixels(env, dstBitmap, &pixels) < 0) return false;
+
+    if (info.width != mat.cols || info.height != mat.rows) {
+        AndroidBitmap_unlockPixels(env, dstBitmap);
+        return false;
+    }
+
+    cv::Mat outMat(info.height, info.width, CV_8UC4, pixels, info.stride);
+    if (mat.channels() == 3) {
+        cv::cvtColor(mat, outMat, cv::COLOR_BGR2RGBA);
+    } else if (mat.channels() == 1) {
+        cv::cvtColor(mat, outMat, cv::COLOR_GRAY2RGBA);
+    } else if (mat.channels() == 4) {
+        mat.copyTo(outMat);
+    }
+
+    AndroidBitmap_unlockPixels(env, dstBitmap);
+    return true;
+}
+
 jobject matToBitmap(JNIEnv *env, const cv::Mat &mat) {
     jclass bitmapCls = env->FindClass("android/graphics/Bitmap");
     jmethodID createBitmap = env->GetStaticMethodID(bitmapCls, "createBitmap",

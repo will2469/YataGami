@@ -52,10 +52,17 @@ void suppressGlare(const cv::Mat& bgr, cv::Mat& dst) {
     std::vector<cv::Mat> channels(3);
     cv::split(*lab, channels);
 
-    ScopedMat compressed(bgr.rows, bgr.cols, CV_32F);
-    channels[0].convertTo(*compressed, CV_32F);
-    *compressed = cv::min(*compressed, 230.0f + (*compressed - 230.0f) * 0.25f);
-    compressed->convertTo(channels[0], CV_8U);
+    // Cache-friendly 256-entry LUT (aligned to 64-byte Cortex-A76 cache line)
+    alignas(64) uchar glareLut[256];
+    for (int i = 0; i < 256; ++i) {
+        if (i > 230) {
+            glareLut[i] = static_cast<uchar>(230 + (i - 230) * 0.25f);
+        } else {
+            glareLut[i] = static_cast<uchar>(i);
+        }
+    }
+    cv::Mat lutMat(1, 256, CV_8U, glareLut);
+    cv::LUT(channels[0], lutMat, channels[0]);
 
     cv::merge(channels, *lab);
     cv::cvtColor(*lab, dst, cv::COLOR_Lab2BGR);

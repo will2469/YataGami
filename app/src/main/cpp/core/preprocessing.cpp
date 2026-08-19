@@ -17,7 +17,7 @@ void applyDynamicGamma(const cv::Mat& gray, cv::Mat& dst) {
         return;
     }
 
-    uchar lut[256];
+    alignas(64) uchar lut[256];
     for (int i = 0; i < 256; ++i) {
         lut[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, gamma) * 255.0);
     }

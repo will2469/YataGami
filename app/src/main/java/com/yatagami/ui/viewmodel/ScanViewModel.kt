@@ -74,9 +74,16 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             if (idx == -1) return@launch
             val page = pages[idx]
             isProcessing.value = true
-            val enhanced = processor.enhanceImage(page.croppedBitmap ?: page.originalBitmap, mode)
-            page.filterMode = mode
-            page.processedBitmap = enhanced
+            val src = page.croppedBitmap ?: page.originalBitmap
+            val existing = page.processedBitmap
+            if (existing != null && existing.width == src.width && existing.height == src.height && !existing.isRecycled) {
+                processor.enhanceImageDirect(src, existing, mode)
+                page.filterMode = mode
+            } else {
+                val enhanced = processor.enhanceImage(src, mode)
+                page.filterMode = mode
+                page.processedBitmap = enhanced
+            }
             pages[idx] = page.copy() // trigger recomposition
             isProcessing.value = false
         }

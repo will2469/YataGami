@@ -9,16 +9,23 @@ std::vector<cv::Point2f> orderQuadCorners(const std::vector<cv::Point2f>& pts) {
     if (pts.size() != 4) return pts;
 
     std::vector<cv::Point2f> ordered(4);
-    std::vector<float> sums(4), diffs(4);
+    alignas(64) float sums[4];
+    alignas(64) float diffs[4];
     for (int i = 0; i < 4; ++i) {
         sums[i] = pts[i].x + pts[i].y;
         diffs[i] = pts[i].x - pts[i].y;
     }
 
-    int tlIdx = static_cast<int>(std::min_element(sums.begin(), sums.end()) - sums.begin());
-    int brIdx = static_cast<int>(std::max_element(sums.begin(), sums.end()) - sums.begin());
-    int trIdx = static_cast<int>(std::max_element(diffs.begin(), diffs.end()) - diffs.begin());
-    int blIdx = static_cast<int>(std::min_element(diffs.begin(), diffs.end()) - diffs.begin());
+    int tlIdx = 0, brIdx = 0, trIdx = 0, blIdx = 0;
+    float minSum = sums[0], maxSum = sums[0];
+    float minDiff = diffs[0], maxDiff = diffs[0];
+
+    for (int i = 1; i < 4; ++i) {
+        if (sums[i] < minSum) { minSum = sums[i]; tlIdx = i; }
+        if (sums[i] > maxSum) { maxSum = sums[i]; brIdx = i; }
+        if (diffs[i] > maxDiff) { maxDiff = diffs[i]; trIdx = i; }
+        if (diffs[i] < minDiff) { minDiff = diffs[i]; blIdx = i; }
+    }
 
     ordered[0] = pts[tlIdx];
     ordered[1] = pts[trIdx];

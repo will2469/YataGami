@@ -17,6 +17,9 @@ public:
     // Release buffer back to pool
     void release(cv::Mat& mat);
 
+    // Warm-up and preallocate common Mats at startup
+    void preallocate();
+
     // Clear pool (e.g., on low memory)
     void clear();
 

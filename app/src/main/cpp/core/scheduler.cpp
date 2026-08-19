@@ -43,16 +43,16 @@ std::vector<int> detectBigCoreIndices() {
 } // namespace
 
 void initThreadEnvironment() {
-    // Restrict OpenCV parallel threads to 2 (matching 2x Cortex-A75 big cores on Helio G100)
+    // Restrict OpenCV parallel threads to 2 (matching 2x Cortex-A76 big cores on Helio G100 Ultimate)
     cv::setNumThreads(2);
-    LOGI("OpenCV thread limit initialized to 2 threads for Helio G100");
+    LOGI("OpenCV thread limit initialized to 2 threads for Helio G100 Ultimate (Cortex-A76)");
 }
 
 void pinThreadToBigCores() {
     // Elevate priority (nice -10 for real-time document computation)
     setpriority(PRIO_PROCESS, 0, -10);
 
-    // Set CPU affinity to Cortex-A75 big cores
+    // Set CPU affinity to Cortex-A76 big cores
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     static const std::vector<int> bigCores = detectBigCoreIndices();
@@ -61,7 +61,7 @@ void pinThreadToBigCores() {
     }
 
     if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == 0) {
-        LOGI("Thread pinned to Cortex-A75 big cores");
+        LOGI("Thread pinned to Cortex-A76 big cores");
     }
 }
 

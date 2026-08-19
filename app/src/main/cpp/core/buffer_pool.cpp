@@ -35,6 +35,27 @@ void BufferPool::release(cv::Mat& mat) {
     }
 }
 
+void BufferPool::preallocate() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Pre-warm preview detection Mats (640x480 gray & BGR)
+    for (int i = 0; i < 4; ++i) {
+        cv::Mat mGray(480, 640, CV_8UC1);
+        pool_[{480, 640, CV_8UC1}].push_back(std::move(mGray));
+
+        cv::Mat mBgr(480, 640, CV_8UC3);
+        pool_[{480, 640, CV_8UC3}].push_back(std::move(mBgr));
+    }
+
+    // Pre-warm capture & warp Mats (A4 300DPI 3508x2480 gray & BGR)
+    for (int i = 0; i < 2; ++i) {
+        cv::Mat mDocBgr(3508, 2480, CV_8UC3);
+        pool_[{3508, 2480, CV_8UC3}].push_back(std::move(mDocBgr));
+
+        cv::Mat mDocGray(3508, 2480, CV_8UC1);
+        pool_[{3508, 2480, CV_8UC1}].push_back(std::move(mDocGray));
+    }
+}
+
 void BufferPool::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     for (auto& pair : pool_) {

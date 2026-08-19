@@ -12,6 +12,7 @@ add_library(
     SHARED
     core/common.cpp
     core/buffer_pool.cpp
+    core/arena.cpp
     core/scheduler.cpp
     core/preprocessing.cpp
     core/geometry.cpp

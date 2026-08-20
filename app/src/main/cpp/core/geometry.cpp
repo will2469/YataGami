@@ -68,12 +68,12 @@ float calculateQuadConfidence(const std::vector<cv::Point2f>& corners, float img
     if (totalArea <= 0.0f) return 0.0f;
     float areaRatio = static_cast<float>(quadArea / totalArea);
     
-    // If contour is essentially the entire frame (>95%), it is a fallback, not a detected document
-    if (areaRatio > 0.95f || areaRatio < 0.03f) {
+    // If contour is essentially the entire frame (>95%) or too tiny (<2%)
+    if (areaRatio > 0.95f || areaRatio < 0.02f) {
         return 0.0f;
     }
 
-    float areaScore = std::clamp((areaRatio - 0.03f) / 0.85f, 0.0f, 1.0f);
+    float areaScore = std::clamp((areaRatio - 0.02f) / 0.85f, 0.0f, 1.0f);
 
     // 2. Parallelism (0.20 weight)
     float topLen = pointDist(q[0], q[1]);
@@ -142,10 +142,33 @@ std::vector<cv::Point2f> detectDocumentCorners(const cv::Mat& img, float* outCon
     std::vector<cv::Point2f> docCorners;
     bool foundQuad = false;
 
+    auto tryExtractQuadFromContours = [&](const std::vector<std::vector<cv::Point>>& contours) -> bool {
+        for (const auto &contour : contours) {
+            double area = cv::contourArea(contour);
+            if (area < imgArea * 0.02f || area > imgArea * 0.95f) continue;
+
+            double perimeter = cv::arcLength(contour, true);
+            const double epsilons[] = {0.015, 0.02, 0.03, 0.04, 0.05};
+            for (double eps : epsilons) {
+                std::vector<cv::Point> approx;
+                cv::approxPolyDP(contour, approx, eps * perimeter, true);
+
+                if (approx.size() == 4 && cv::isContourConvex(approx)) {
+                    docCorners.clear();
+                    for (const auto &p : approx) {
+                        docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
     // PIPELINE 1: Multi-scale Canny Edges
     {
         ScopedMat edges(processImg.rows, processImg.cols, CV_8UC1);
-        cv::Canny(*preprocessed, *edges, 35, 110);
+        cv::Canny(*preprocessed, *edges, 30, 90);
         cv::Mat morphKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
         cv::morphologyEx(*edges, *edges, cv::MORPH_CLOSE, morphKernel);
 
@@ -157,67 +180,46 @@ std::vector<cv::Point2f> detectDocumentCorners(const cv::Mat& img, float* outCon
                 return cv::contourArea(a) > cv::contourArea(b);
             });
 
-        for (const auto &contour : contours) {
-            double area = cv::contourArea(contour);
-            if (area < imgArea * 0.03f || area > imgArea * 0.94f) continue;
-
-            double perimeter = cv::arcLength(contour, true);
-            std::vector<cv::Point> approx;
-            cv::approxPolyDP(contour, approx, 0.02 * perimeter, true);
-
-            if (approx.size() == 4 && cv::isContourConvex(approx)) {
-                for (const auto &p : approx) {
-                    docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
-                }
-                foundQuad = true;
-                break;
-            }
-        }
+        foundQuad = tryExtractQuadFromContours(contours);
     }
 
-    // PIPELINE 2: Otsu Binary Thresholding (for high-contrast paper on tables)
+    // PIPELINE 2: Otsu Binary Thresholding
     if (!foundQuad) {
         ScopedMat binary(processImg.rows, processImg.cols, CV_8UC1);
         cv::threshold(*preprocessed, *binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
         std::vector<std::vector<cv::Point>> contours;
         cv::findContours(*binary, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
-
         std::sort(contours.begin(), contours.end(),
-            [](const auto &a, const auto &b) {
-                return cv::contourArea(a) > cv::contourArea(b);
-            });
+            [](const auto &a, const auto &b) { return cv::contourArea(a) > cv::contourArea(b); });
 
-        for (const auto &contour : contours) {
-            double area = cv::contourArea(contour);
-            if (area < imgArea * 0.03f || area > imgArea * 0.94f) continue;
+        foundQuad = tryExtractQuadFromContours(contours);
+    }
 
-            double perimeter = cv::arcLength(contour, true);
-            std::vector<cv::Point> approx;
-            cv::approxPolyDP(contour, approx, 0.025 * perimeter, true);
+    // PIPELINE 3: Otsu Binary Inverted Thresholding
+    if (!foundQuad) {
+        ScopedMat binaryInv(processImg.rows, processImg.cols, CV_8UC1);
+        cv::threshold(*preprocessed, *binaryInv, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
 
-            if (approx.size() == 4 && cv::isContourConvex(approx)) {
-                docCorners.clear();
-                for (const auto &p : approx) {
-                    docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
-                }
-                foundQuad = true;
-                break;
-            }
-        }
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(*binaryInv, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+        std::sort(contours.begin(), contours.end(),
+            [](const auto &a, const auto &b) { return cv::contourArea(a) > cv::contourArea(b); });
+
+        foundQuad = tryExtractQuadFromContours(contours);
     }
 
     // Fallback: Convex Hull approximation on largest contour
     if (!foundQuad) {
         ScopedMat edges(processImg.rows, processImg.cols, CV_8UC1);
-        cv::Canny(*preprocessed, *edges, 30, 90);
+        cv::Canny(*preprocessed, *edges, 20, 80);
         std::vector<std::vector<cv::Point>> contours;
         cv::findContours(*edges, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
         std::sort(contours.begin(), contours.end(), [](const auto &a, const auto &b) { return cv::contourArea(a) > cv::contourArea(b); });
 
         if (!contours.empty()) {
             double area = cv::contourArea(contours[0]);
-            if (area >= imgArea * 0.04f && area <= imgArea * 0.94f) {
+            if (area >= imgArea * 0.03f && area <= imgArea * 0.94f) {
                 std::vector<cv::Point> hull;
                 cv::convexHull(contours[0], hull);
                 double perimeter = cv::arcLength(hull, true);
@@ -254,7 +256,7 @@ std::vector<cv::Point2f> detectDocumentCorners(const cv::Mat& img, float* outCon
         }
 
         // Subpixel refinement with small window (5x5) if confidence is high
-        if (confidence > 0.60f) {
+        if (confidence > 0.50f) {
             bool allInside = true;
             int margin = 6;
             for (const auto& pt : docCorners) {

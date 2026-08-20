@@ -50,7 +50,7 @@ fun DocumentOverlay(
             val canvasW = size.width
             val canvasH = size.height
 
-            // 1. Document Frame Alignment Guide (85% of screen area)
+            // 1. Document Frame Alignment Guide
             if (showAlignmentGuide) {
                 val frameW = canvasW * 0.86f
                 val frameH = canvasH * 0.72f
@@ -75,10 +75,10 @@ fun DocumentOverlay(
                 )
             }
 
-            // 2. Real-time Neon Document Contour Polygon
-            if (corners.size == 4 && confidence >= 0.40f) {
-                val pts = corners.map { Offset(it.x * canvasW, it.y * canvasH) }
-                val mainColor = if (isStable && confidence >= 0.75f) {
+            // 2. Real-time Neon Document Contour Polygon mapped to PreviewView (FILL_CENTER)
+            if (corners.size == 4 && confidence >= 0.35f) {
+                val pts = corners.map { mapNormalizedToScreen(it.x, it.y, canvasW, canvasH) }
+                val mainColor = if (isStable && confidence >= 0.65f) {
                     Color(0xFF00E676) // Neon Green
                 } else {
                     Color(0xFFFFD600) // Amber Yellow
@@ -188,4 +188,40 @@ fun DocumentOverlay(
             }
         }
     }
+}
+
+/**
+ * Maps normalized [0.0, 1.0] coordinates from the 4:3 camera stream to PreviewView FILL_CENTER screen coordinates.
+ */
+private fun mapNormalizedToScreen(
+    normX: Float,
+    normY: Float,
+    canvasW: Float,
+    canvasH: Float,
+    cameraAspect: Float = 3f / 4f
+): Offset {
+    val screenAspect = canvasW / canvasH
+    val wRendered: Float
+    val hRendered: Float
+    val xOffset: Float
+    val yOffset: Float
+
+    if (screenAspect < cameraAspect) {
+        // Screen is taller than 4:3 camera stream (FILL_CENTER crops left/right)
+        hRendered = canvasH
+        wRendered = canvasH * cameraAspect
+        xOffset = (canvasW - wRendered) / 2f
+        yOffset = 0f
+    } else {
+        // Screen is wider than camera stream (FILL_CENTER crops top/bottom)
+        wRendered = canvasW
+        hRendered = canvasW / cameraAspect
+        xOffset = 0f
+        yOffset = (canvasH - hRendered) / 2f
+    }
+
+    return Offset(
+        x = xOffset + normX * wRendered,
+        y = yOffset + normY * hRendered
+    )
 }

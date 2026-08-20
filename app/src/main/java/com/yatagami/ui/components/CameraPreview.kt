@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -99,6 +100,12 @@ fun CameraPreview(
         }
     }
 
+    val currentAutoCaptureEnabled by rememberUpdatedState(autoCaptureEnabled)
+    val currentOnDocumentDetected by rememberUpdatedState(onDocumentDetected)
+    val currentOnCountdownProgress by rememberUpdatedState(onCountdownProgress)
+    val currentOnImageCaptured by rememberUpdatedState(onImageCaptured)
+    val currentOnCameraReady by rememberUpdatedState(onCameraReady)
+
     // Torch state handler
     LaunchedEffect(torchMode, currentCamera) {
         currentCamera?.cameraControl?.enableTorch(torchMode == TorchMode.ON)
@@ -114,6 +121,23 @@ fun CameraPreview(
                     )
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                    setOnTouchListener { view, motionEvent ->
+                        if (motionEvent.action == android.view.MotionEvent.ACTION_UP) {
+                            try {
+                                val factory = meteringPointFactory
+                                val point = factory.createPoint(motionEvent.x, motionEvent.y)
+                                val action = androidx.camera.core.FocusMeteringAction.Builder(
+                                    point,
+                                    androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE
+                                ).setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS).build()
+                                currentCamera?.cameraControl?.startFocusAndMetering(action)
+                                view.performClick()
+                            } catch (e: Exception) {
+                                Log.w("CameraPreview", "Focus failed", e)
+                            }
+                        }
+                        true
+                    }
                 }
 
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
@@ -131,12 +155,20 @@ fun CameraPreview(
                         it.setAnalyzer(executor) { imageProxy ->
                             frameAnalyzerHelper.analyze(
                                 imageProxy = imageProxy,
-                                onDocumentDetected = onDocumentDetected,
-                                autoCaptureEnabled = autoCaptureEnabled,
-                                onCountdownProgress = onCountdownProgress,
+                                onDocumentDetected = currentOnDocumentDetected,
+                                autoCaptureEnabled = currentAutoCaptureEnabled,
+                                onCountdownProgress = currentOnCountdownProgress,
                                 onTriggerCapture = {
-                                    CameraFeedbackHelper.triggerCaptureFeedback(context) { isCapturingFlash = it }
-                                    CameraFeedbackHelper.takePictureDirect(imageCapture, executor, onImageCaptured)
+                                    if (currentAutoCaptureEnabled) {
+                                        CameraFeedbackHelper.triggerCaptureFeedback(context) { isCapturingFlash = it }
+                                        CameraFeedbackHelper.takePictureWithAutoFocusLock(
+                                            camera = currentCamera,
+                                            previewView = previewView,
+                                            imageCapture = imageCapture,
+                                            executor = executor,
+                                            onImageCaptured = currentOnImageCaptured
+                                        )
+                                    }
                                 }
                             )
                         }
@@ -154,9 +186,15 @@ fun CameraPreview(
                         currentCamera = camera
 
                         // Expose manual shutter trigger
-                        onCameraReady?.invoke {
+                        currentOnCameraReady?.invoke {
                             CameraFeedbackHelper.triggerCaptureFeedback(context) { isCapturingFlash = it }
-                            CameraFeedbackHelper.takePictureDirect(imageCapture, executor, onImageCaptured)
+                            CameraFeedbackHelper.takePictureWithAutoFocusLock(
+                                camera = currentCamera,
+                                previewView = previewView,
+                                imageCapture = imageCapture,
+                                executor = executor,
+                                onImageCaptured = currentOnImageCaptured
+                            )
                         }
                     } catch (e: Exception) {
                         Log.e("CameraPreview", "Camera bind failed", e)

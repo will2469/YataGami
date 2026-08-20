@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
@@ -66,8 +67,10 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             if (sessionManager.hasValidDraftSession()) {
                 val draft = sessionManager.getDraftSession()
                 if (draft != null && draft.pages.isNotEmpty()) {
-                    draftSession.value = draft
-                    showDraftDialog.value = true
+                    withContext(Dispatchers.Main) {
+                        draftSession.value = draft
+                        showDraftDialog.value = true
+                    }
                 }
             }
         }
@@ -118,44 +121,67 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addPage(bitmap: Bitmap) {
-        viewModelScope.launch {
+    fun addPage(bitmap: Bitmap, lockedNormalizedCorners: FloatArray? = null) {
+        viewModelScope.launch(Dispatchers.Main) {
             isProcessing.value = true
-            val corners = detector.detectDocument(bitmap)
-            val confidence = detector.calculateConfidence(
-                corners, bitmap.width.toFloat(), bitmap.height.toFloat()
-            )
+            try {
+                val currentPageNumber = pages.size + 1
+                val page = withContext(Dispatchers.Default) {
+                    val corners = if (lockedNormalizedCorners != null && lockedNormalizedCorners.size == 8) {
+                        floatArrayOf(
+                            lockedNormalizedCorners[0] * bitmap.width, lockedNormalizedCorners[1] * bitmap.height,
+                            lockedNormalizedCorners[2] * bitmap.width, lockedNormalizedCorners[3] * bitmap.height,
+                            lockedNormalizedCorners[4] * bitmap.width, lockedNormalizedCorners[5] * bitmap.height,
+                            lockedNormalizedCorners[6] * bitmap.width, lockedNormalizedCorners[7] * bitmap.height
+                        )
+                    } else {
+                        detector.detectDocument(bitmap)
+                    }
+                    val confidence = detector.calculateConfidence(
+                        corners, bitmap.width.toFloat(), bitmap.height.toFloat()
+                    )
 
-            val docInfo = processor.inferDocumentType(corners)
-            val warped = processor.warpPerspective(bitmap, corners, docInfo.targetWidth, docInfo.targetHeight)
-            val enhanced = processor.enhanceImage(warped, FilterMode.AUTO)
-            val page = ScannedPage(
-                originalBitmap = bitmap,
-                croppedBitmap = warped,
-                filterMode = FilterMode.AUTO,
-                docType = docInfo.type,
-                isPortrait = docInfo.isPortrait,
-                processedBitmap = enhanced,
-                originalCorners = corners,
-                autoConfidence = confidence,
-                pageNumber = pages.size + 1
-            )
-            pages.add(page)
+                    val docInfo = processor.inferDocumentType(corners)
+                    android.util.Log.d(
+                        "YataGamiScan",
+                        "addPage: bitmap=${bitmap.width}x${bitmap.height}, corners=${corners.toList()}, confidence=$confidence, docType=${docInfo.type}, size=${docInfo.targetWidth}x${docInfo.targetHeight}"
+                    )
 
-            syncSessionPages()
+                    val warped = processor.warpPerspective(bitmap, corners, docInfo.targetWidth, docInfo.targetHeight)
+                    val enhanced = processor.enhanceImage(warped, FilterMode.AUTO)
+                    ScannedPage(
+                        originalBitmap = bitmap,
+                        croppedBitmap = warped,
+                        filterMode = FilterMode.AUTO,
+                        docType = docInfo.type,
+                        isPortrait = docInfo.isPortrait,
+                        processedBitmap = enhanced,
+                        originalCorners = corners,
+                        autoConfidence = confidence,
+                        pageNumber = currentPageNumber
+                    )
+                }
+                pages.add(page)
+                syncSessionPages()
 
-            if (isAutoSaveJpg.value) {
-                repository.saveSingleImageToGallery(page)
+                if (isAutoSaveJpg.value) {
+                    withContext(Dispatchers.IO) {
+                        repository.saveSingleImageToGallery(page)
+                    }
+                }
+
+                _events.emit(ScanEvent.PageAdded(page.id))
+            } catch (e: Exception) {
+                Log.e("ScanViewModel", "Error adding page", e)
+            } finally {
+                isProcessing.value = false
             }
-
-            isProcessing.value = false
-            _events.emit(ScanEvent.PageAdded(page.id))
         }
     }
 
     fun importImagesFromUris(context: Context, uris: List<Uri>) {
         viewModelScope.launch(Dispatchers.IO) {
-            isProcessing.value = true
+            withContext(Dispatchers.Main) { isProcessing.value = true }
             for (uri in uris) {
                 try {
                     context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -170,13 +196,13 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                     e.printStackTrace()
                 }
             }
-            isProcessing.value = false
+            withContext(Dispatchers.Main) { isProcessing.value = false }
         }
     }
 
     fun importPdfFromUri(context: Context, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
-            isProcessing.value = true
+            withContext(Dispatchers.Main) { isProcessing.value = true }
             try {
                 val tempFile = File(context.cacheDir, "temp_import_${System.currentTimeMillis()}.pdf")
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -205,7 +231,7 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 e.printStackTrace()
                 _events.emit(ScanEvent.Error("Gagal mengimpor PDF: ${e.localizedMessage}"))
             } finally {
-                isProcessing.value = false
+                withContext(Dispatchers.Main) { isProcessing.value = false }
             }
         }
     }

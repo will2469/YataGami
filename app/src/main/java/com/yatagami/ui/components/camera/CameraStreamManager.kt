@@ -44,7 +44,7 @@ object CameraStreamManager {
             .build()
     }
 
-    // STREAM 3: ImageCapture (12MP 4000x3000, MINIMIZE_LATENCY)
+    // STREAM 3: ImageCapture (12MP 4000x3000, MAXIMIZE_QUALITY, JPEG 100%)
     fun buildImageCapture(): ImageCapture {
         val captureResolution = ResolutionSelector.Builder()
             .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
@@ -54,7 +54,8 @@ object CameraStreamManager {
             .build()
 
         return ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setJpegQuality(100)
             .setResolutionSelector(captureResolution)
             .build()
     }

@@ -48,7 +48,17 @@ fun CameraScreen(navController: NavController, viewModel: ScanViewModel) {
                 // 1. Camera Viewfinder (3 Decoupled Streams)
                 CameraPreview(
                     onImageCaptured = { bitmap ->
-                        viewModel.addPage(bitmap)
+                        val normalizedCorners = if (detectedCorners.size == 4 && detectionConfidence >= 0.35f) {
+                            floatArrayOf(
+                                detectedCorners[0].x, detectedCorners[0].y,
+                                detectedCorners[1].x, detectedCorners[1].y,
+                                detectedCorners[2].x, detectedCorners[2].y,
+                                detectedCorners[3].x, detectedCorners[3].y
+                            )
+                        } else {
+                            null
+                        }
+                        viewModel.addPage(bitmap, normalizedCorners)
                     },
                     onDocumentDetected = { corners, stable, conf, glare ->
                         detectedCorners = corners

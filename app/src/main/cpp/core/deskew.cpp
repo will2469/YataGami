@@ -36,15 +36,15 @@ cv::Mat warpAndDeskewPerspective(const cv::Mat& src, const std::vector<cv::Point
         {0.0f, static_cast<float>(targetH - 1)}
     };
 
-    // 2. Homography calculation & validation
+    // 2. Homography calculation with Bicubic Interpolation for pin-sharp text
     cv::Mat M = cv::getPerspectiveTransform(paddedCorners, dstPts);
     double det = cv::determinant(M(cv::Rect(0, 0, 2, 2)));
 
     cv::Mat warped;
     if (std::abs(det) < 0.05 || std::abs(det) > 20.0 || !M.isContinuous()) {
-        cv::resize(src, warped, cv::Size(targetW, targetH), 0, 0, cv::INTER_LINEAR);
+        cv::resize(src, warped, cv::Size(targetW, targetH), 0, 0, cv::INTER_CUBIC);
     } else {
-        cv::warpPerspective(padded, warped, M, cv::Size(targetW, targetH), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255, 255, 255));
+        cv::warpPerspective(padded, warped, M, cv::Size(targetW, targetH), cv::INTER_CUBIC, cv::BORDER_CONSTANT, cv::Scalar(255, 255, 255));
     }
 
     // 3. Auto-Orientation check

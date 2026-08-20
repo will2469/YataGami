@@ -2,19 +2,25 @@ package com.yatagami.ui.components.camera
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.PointF
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import androidx.camera.core.Camera
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.view.PreviewView
 import com.yatagami.utils.BitmapUtils.toRotatedBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 
 object CameraFeedbackHelper {
 
@@ -50,7 +56,7 @@ object CameraFeedbackHelper {
 
     fun takePictureDirect(
         imageCapture: ImageCapture,
-        executor: java.util.concurrent.Executor,
+        executor: Executor,
         onImageCaptured: (Bitmap) -> Unit
     ) {
         imageCapture.takePicture(
@@ -66,5 +72,43 @@ object CameraFeedbackHelper {
                 }
             }
         )
+    }
+
+    fun takePictureWithAutoFocusLock(
+        camera: Camera?,
+        previewView: PreviewView,
+        imageCapture: ImageCapture,
+        executor: Executor,
+        targetPointNorm: PointF? = null,
+        onImageCaptured: (Bitmap) -> Unit
+    ) {
+        val cameraControl = camera?.cameraControl
+        if (cameraControl == null) {
+            takePictureDirect(imageCapture, executor, onImageCaptured)
+            return
+        }
+
+        try {
+            val fx = (targetPointNorm?.x ?: 0.5f) * previewView.width.coerceAtLeast(1)
+            val fy = (targetPointNorm?.y ?: 0.5f) * previewView.height.coerceAtLeast(1)
+            val factory = previewView.meteringPointFactory
+            val meteringPoint = factory.createPoint(fx, fy)
+
+            val focusAction = FocusMeteringAction.Builder(
+                meteringPoint,
+                FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
+            )
+            .setAutoCancelDuration(2, TimeUnit.SECONDS)
+            .build()
+
+            val focusFuture = cameraControl.startFocusAndMetering(focusAction)
+            focusFuture.addListener({
+                // Optical focus is now locked on document text -> fire capture!
+                takePictureDirect(imageCapture, executor, onImageCaptured)
+            }, executor)
+        } catch (e: Exception) {
+            Log.w("CameraFeedback", "Focus lock failed, taking direct picture", e)
+            takePictureDirect(imageCapture, executor, onImageCaptured)
+        }
     }
 }

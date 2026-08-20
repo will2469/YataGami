@@ -141,9 +141,7 @@ class FrameAnalyzerHelper(
                         }
                     }
                 } else {
-                    if (hasSevereGlare && autoCaptureState is AutoCaptureState.CountingDown) {
-                        autoCaptureState = AutoCaptureState.Idle
-                    }
+                    autoCaptureState = AutoCaptureState.Idle
                     onCountdownProgress(0f)
                 }
             } catch (e: Exception) {

@@ -76,11 +76,8 @@ void preprocessForDetection(const cv::Mat& bgr, cv::Mat& dst) {
     ScopedMat gray(bgr.rows, bgr.cols, CV_8UC1);
     cv::cvtColor(bgr, *gray, cv::COLOR_BGR2GRAY);
 
-    // Apply fast noise reduction followed by CLAHE contrast enhancement
-    ScopedMat blurred(bgr.rows, bgr.cols, CV_8UC1);
-    cv::GaussianBlur(*gray, *blurred, cv::Size(5, 5), 0);
-
-    applyCLAHEGray(*blurred, dst);
+    // Fast 5x5 Gaussian blur preserves outer paper perimeter without CLAHE tile artifacts
+    cv::GaussianBlur(*gray, dst, cv::Size(5, 5), 0);
 }
 
 cv::Mat preprocessForDetection(const cv::Mat& bgr) {

@@ -5,11 +5,12 @@ import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.yatagami.opencv.DocumentDetector
 import com.yatagami.ui.components.AutoCaptureState
-import com.yatagami.utils.BitmapUtils.toBitmap
+import com.yatagami.utils.BitmapUtils.toRotatedBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.hypot
 
 class FrameAnalyzerHelper(
@@ -21,6 +22,7 @@ class FrameAnalyzerHelper(
     private var autoCaptureState: AutoCaptureState = AutoCaptureState.Idle
     private var countdownStartTime = 0L
     private val COUNTDOWN_DURATION_MS = 500L
+    private val isAnalyzing = AtomicBoolean(false)
 
     fun analyze(
         imageProxy: ImageProxy,
@@ -29,21 +31,23 @@ class FrameAnalyzerHelper(
         onCountdownProgress: (Float) -> Unit,
         onTriggerCapture: () -> Unit
     ) {
+        if (!isAnalyzing.compareAndSet(false, true)) {
+            imageProxy.close()
+            return
+        }
+
         val bitmap = try {
-            imageProxy.toBitmap().let { bmp ->
-                if (imageProxy.imageInfo.rotationDegrees != 0) {
-                    com.yatagami.utils.BitmapUtils.rotateBitmap(bmp, imageProxy.imageInfo.rotationDegrees)
-                } else {
-                    bmp
-                }
-            }
+            imageProxy.toRotatedBitmap()
         } catch (e: Exception) {
             null
         } finally {
-            imageProxy.close() // Release hardware buffer immediately
+            imageProxy.close()
         }
 
-        if (bitmap == null) return
+        if (bitmap == null) {
+            isAnalyzing.set(false)
+            return
+        }
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
@@ -53,7 +57,15 @@ class FrameAnalyzerHelper(
                 )
                 val glareRatio = detector.calculateGlareRatio(bitmap)
 
-                val rawPts = cornersArray.toList().chunked(2).map { PointF(it[0], it[1]) }
+                // Normalize corner coordinates to [0.0, 1.0] relative to rotated bitmap dimension
+                val bw = bitmap.width.toFloat().coerceAtLeast(1f)
+                val bh = bitmap.height.toFloat().coerceAtLeast(1f)
+                val rawPts = cornersArray.toList().chunked(2).map { 
+                    PointF(
+                        (it[0] / bw).coerceIn(0f, 1f),
+                        (it[1] / bh).coerceIn(0f, 1f)
+                    ) 
+                }
                 val isFullImageFallback = (cornersArray[0] == 0f && cornersArray[1] == 0f) || confidence < 0.35f
 
                 // Adaptive Velocity-Aware EMA Smoothing
@@ -66,10 +78,10 @@ class FrameAnalyzerHelper(
                     velocity /= 4f
                 }
 
-                // Alpha between 0.25 (smooth holding) and 0.55 (quick movement)
-                val adaptiveAlpha = (0.25f + (velocity / 50f).coerceIn(0f, 0.30f))
+                // Alpha between 0.30 (smooth holding) and 0.65 (quick movement)
+                val adaptiveAlpha = (0.30f + (velocity / 0.10f).coerceIn(0f, 0.35f))
 
-                val finalPts = if (confidence >= 0.45f && rawPts.size == 4) {
+                val finalPts = if (confidence >= 0.35f && rawPts.size == 4) {
                     if (prev != null && prev.size == 4) {
                         (0 until 4).map { i ->
                             PointF(
@@ -83,7 +95,7 @@ class FrameAnalyzerHelper(
                 }
                 smoothedCorners = finalPts
 
-                // Multi-Factor 5-Frame Stability Check
+                // Multi-Factor Stability Check
                 val isStable = check5FrameStability(finalPts, isFullImageFallback, confidence)
                 onDocumentDetected(finalPts, isStable, confidence, glareRatio)
 
@@ -92,12 +104,12 @@ class FrameAnalyzerHelper(
                 if (autoCaptureEnabled && !isFullImageFallback && !hasSevereGlare) {
                     when (autoCaptureState) {
                         is AutoCaptureState.Idle -> {
-                            if (isStable && confidence >= 0.75f) {
+                            if (isStable && confidence >= 0.65f) {
                                 autoCaptureState = AutoCaptureState.Stabilizing
                             }
                         }
                         is AutoCaptureState.Stabilizing -> {
-                            if (!isStable || confidence < 0.70f) {
+                            if (!isStable || confidence < 0.60f) {
                                 autoCaptureState = AutoCaptureState.Idle
                                 onCountdownProgress(0f)
                             } else {
@@ -106,7 +118,7 @@ class FrameAnalyzerHelper(
                             }
                         }
                         is AutoCaptureState.CountingDown -> {
-                            if (!isStable || confidence < 0.70f) {
+                            if (!isStable || confidence < 0.60f) {
                                 // Cancel countdown on movement or confidence drop
                                 autoCaptureState = AutoCaptureState.Idle
                                 onCountdownProgress(0f)
@@ -136,12 +148,14 @@ class FrameAnalyzerHelper(
                 }
             } catch (e: Exception) {
                 Log.e("FrameAnalyzerHelper", "Analysis error", e)
+            } finally {
+                isAnalyzing.set(false)
             }
         }
     }
 
     private fun check5FrameStability(current: List<PointF>, isFallback: Boolean, confidence: Float): Boolean {
-        if (isFallback || current.size != 4 || confidence < 0.65f) {
+        if (isFallback || current.size != 4 || confidence < 0.50f) {
             stableFrameCount = 0
             previousCorners = null
             return false
@@ -155,8 +169,8 @@ class FrameAnalyzerHelper(
                 if (dist > maxMovement) maxMovement = dist
             }
 
-            // Stability threshold: < 8px drift in 720p analysis
-            if (maxMovement < 8f) {
+            // Stability threshold: < 2.0% drift in normalized coordinates
+            if (maxMovement < 0.020f) {
                 stableFrameCount++
             } else {
                 stableFrameCount = 0
@@ -166,6 +180,6 @@ class FrameAnalyzerHelper(
         }
 
         previousCorners = current
-        return stableFrameCount >= 5 // Require 5 consecutive stable frames (~333ms)
+        return stableFrameCount >= 4
     }
 }

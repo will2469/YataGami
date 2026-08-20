@@ -10,7 +10,7 @@ import android.util.Log
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
-import com.yatagami.utils.BitmapUtils.toBitmap
+import com.yatagami.utils.BitmapUtils.toRotatedBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -57,7 +57,7 @@ object CameraFeedbackHelper {
             executor,
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
-                    val cap = image.toBitmap()
+                    val cap = image.toRotatedBitmap()
                     image.close()
                     cap?.let(onImageCaptured)
                 }

@@ -18,19 +18,32 @@ import java.io.FileOutputStream
 object BitmapUtils {
 
     /**
-     * Konversi ImageProxy (YUV_420_888) ke Bitmap RGBA_8888.
-     * Dipake di CameraX ImageAnalysis / ImageCapture callback.
+     * Konversi ImageProxy ke Bitmap dengan rotasi yang benar (tepat 1x rotasi).
      */
-    fun ImageProxy.toBitmap(): Bitmap? {
-        return when (format) {
-            ImageFormat.YUV_420_888 -> yuv420888ToBitmap(this)
-            else -> null
+    fun ImageProxy.toRotatedBitmap(): Bitmap? {
+        return try {
+            val rawBitmap = this.toBitmap()
+            if (rawBitmap != null && imageInfo.rotationDegrees != 0) {
+                rotateBitmap(rawBitmap, imageInfo.rotationDegrees)
+            } else {
+                rawBitmap
+            }
+        } catch (e: Exception) {
+            // Fallback for YUV format if toBitmap() fails
+            try {
+                if (format == ImageFormat.YUV_420_888) {
+                    yuv420888ToBitmap(this)
+                } else {
+                    null
+                }
+            } catch (ex: Exception) {
+                null
+            }
         }
     }
 
     /**
-     * Konversi YUV_420_888 ke Bitmap via YuvImage (JPEG bridge).
-     * Cara ini paling stabil dan compatible di semua device.
+     * Konversi YUV_420_888 ke Bitmap via YuvImage.
      */
     private fun yuv420888ToBitmap(image: ImageProxy): Bitmap? {
         return try {
@@ -61,7 +74,7 @@ object BitmapUtils {
             val out = ByteArrayOutputStream()
             yuvImage.compressToJpeg(
                 Rect(0, 0, image.width, image.height),
-                100,
+                95,
                 out
             )
             val jpegBytes = out.toByteArray()
@@ -69,10 +82,12 @@ object BitmapUtils {
             val bitmap = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
                 ?: return null
 
-            // Rotasi sesuai rotation degrees dari ImageProxy
-            return rotateBitmap(bitmap, image.imageInfo.rotationDegrees)
+            if (image.imageInfo.rotationDegrees != 0) {
+                rotateBitmap(bitmap, image.imageInfo.rotationDegrees)
+            } else {
+                bitmap
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         }
     }
@@ -99,7 +114,6 @@ object BitmapUtils {
 
     /**
      * Resize bitmap dengan aspect ratio tetap terjaga.
-     * @param maxDimensi ukuran pixel maksimum (width atau height, yang lebih besar)
      */
     fun resizeKeepingAspectRatio(bitmap: Bitmap, maxDimension: Int): Bitmap {
         val width = bitmap.width
@@ -121,7 +135,6 @@ object BitmapUtils {
 
     /**
      * Simpan bitmap ke file temporary (cache directory).
-     * Berguna untuk debugging atau passing antar screen.
      */
     fun saveBitmapToCache(bitmap: Bitmap, cacheDir: File, fileName: String): File? {
         return try {
@@ -131,7 +144,6 @@ object BitmapUtils {
             }
             file
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         }
     }
@@ -143,14 +155,12 @@ object BitmapUtils {
         return try {
             BitmapFactory.decodeFile(file.absolutePath)
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         }
     }
 
     /**
      * Crop bitmap ke aspect ratio A4 (1:1.414).
-     * Dipake kalau mau force crop sebelum masuk ke OpenCV.
      */
     fun cropToA4Ratio(bitmap: Bitmap): Bitmap {
         val width = bitmap.width
@@ -159,12 +169,10 @@ object BitmapUtils {
         val a4Ratio = 1.414f
 
         return if (currentRatio > a4Ratio) {
-            // Terlalu tinggi, crop height
             val newHeight = (width * a4Ratio).toInt()
             val top = (height - newHeight) / 2
             Bitmap.createBitmap(bitmap, 0, top, width, newHeight)
         } else {
-            // Terlalu lebar, crop width
             val newWidth = (height / a4Ratio).toInt()
             val left = (width - newWidth) / 2
             Bitmap.createBitmap(bitmap, left, 0, newWidth, height)
@@ -173,7 +181,6 @@ object BitmapUtils {
 
     /**
      * Flip bitmap horizontal (mirror).
-     * Kadang perlu untuk kamera depan atau efek cermin.
      */
     fun flipHorizontally(bitmap: Bitmap): Bitmap {
         val matrix = Matrix().apply { postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f) }

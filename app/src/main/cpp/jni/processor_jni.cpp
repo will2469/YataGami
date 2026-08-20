@@ -8,6 +8,7 @@
 #include "core/enhancement.h"
 #include "core/scene_analysis.h"
 #include "core/geometry.h"
+#include <exception>
 
 extern "C" {
 
@@ -17,20 +18,24 @@ Java_com_yatagami_opencv_ImageProcessor_nativeWarpPerspective(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat src;
-    if (!yatagami::bitmapToMat(env, srcBitmap, src)) {
+    try {
+        cv::Mat src;
+        if (!yatagami::bitmapToMat(env, srcBitmap, src)) {
+            return nullptr;
+        }
+
+        jfloat *pts = env->GetFloatArrayElements(corners, nullptr);
+        std::vector<cv::Point2f> srcPts = {
+            {pts[0], pts[1]}, {pts[2], pts[3]},
+            {pts[4], pts[5]}, {pts[6], pts[7]}
+        };
+        env->ReleaseFloatArrayElements(corners, pts, 0);
+
+        cv::Mat deskewed = yatagami::warpAndDeskewPerspective(src, srcPts, dstWidth, dstHeight);
+        return yatagami::matToBitmap(env, deskewed);
+    } catch (...) {
         return nullptr;
     }
-
-    jfloat *pts = env->GetFloatArrayElements(corners, nullptr);
-    std::vector<cv::Point2f> srcPts = {
-        {pts[0], pts[1]}, {pts[2], pts[3]},
-        {pts[4], pts[5]}, {pts[6], pts[7]}
-    };
-    env->ReleaseFloatArrayElements(corners, pts, 0);
-
-    cv::Mat deskewed = yatagami::warpAndDeskewPerspective(src, srcPts, dstWidth, dstHeight);
-    return yatagami::matToBitmap(env, deskewed);
 }
 
 JNIEXPORT jfloat JNICALL
@@ -39,13 +44,17 @@ Java_com_yatagami_opencv_ImageProcessor_nativeDetectSkewAngle(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat bgr;
-    if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+    try {
+        cv::Mat bgr;
+        if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+            return 0.0f;
+        }
+
+        double angle = yatagami::detectTextSkewAngle(bgr);
+        return static_cast<jfloat>(angle);
+    } catch (...) {
         return 0.0f;
     }
-
-    double angle = yatagami::detectTextSkewAngle(bgr);
-    return static_cast<jfloat>(angle);
 }
 
 JNIEXPORT jobject JNICALL
@@ -54,14 +63,18 @@ Java_com_yatagami_opencv_ImageProcessor_nativeDeskew(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat bgr;
-    if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+    try {
+        cv::Mat bgr;
+        if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+            return nullptr;
+        }
+
+        double angle = 0.0;
+        cv::Mat deskewed = yatagami::deskewImage(bgr, angle);
+        return yatagami::matToBitmap(env, deskewed);
+    } catch (...) {
         return nullptr;
     }
-
-    double angle = 0.0;
-    cv::Mat deskewed = yatagami::deskewImage(bgr, angle);
-    return yatagami::matToBitmap(env, deskewed);
 }
 
 JNIEXPORT jfloat JNICALL
@@ -70,12 +83,16 @@ Java_com_yatagami_opencv_ImageProcessor_nativeCalculateBlurScore(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat bgr;
-    if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+    try {
+        cv::Mat bgr;
+        if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+            return 0.0f;
+        }
+
+        return static_cast<jfloat>(yatagami::calculateBlurScore(bgr));
+    } catch (...) {
         return 0.0f;
     }
-
-    return static_cast<jfloat>(yatagami::calculateBlurScore(bgr));
 }
 
 JNIEXPORT jfloat JNICALL
@@ -84,12 +101,16 @@ Java_com_yatagami_opencv_ImageProcessor_nativeCalculateGlareRatio(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat bgr;
-    if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+    try {
+        cv::Mat bgr;
+        if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+            return 0.0f;
+        }
+
+        return static_cast<jfloat>(yatagami::calculateGlareRatio(bgr));
+    } catch (...) {
         return 0.0f;
     }
-
-    return static_cast<jfloat>(yatagami::calculateGlareRatio(bgr));
 }
 
 JNIEXPORT jint JNICALL
@@ -98,12 +119,16 @@ Java_com_yatagami_opencv_ImageProcessor_nativeRecommendFilter(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat bgr;
-    if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+    try {
+        cv::Mat bgr;
+        if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+            return 0;
+        }
+
+        return yatagami::recommendFilterMode(bgr);
+    } catch (...) {
         return 0;
     }
-
-    return yatagami::recommendFilterMode(bgr);
 }
 
 JNIEXPORT jobject JNICALL
@@ -112,13 +137,17 @@ Java_com_yatagami_opencv_ImageProcessor_nativeEnhanceImage(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat bgr;
-    if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+    try {
+        cv::Mat bgr;
+        if (!yatagami::bitmapToMat(env, bitmap, bgr)) {
+            return nullptr;
+        }
+
+        cv::Mat processed = yatagami::enhanceImage(bgr, mode);
+        return yatagami::matToBitmap(env, processed);
+    } catch (...) {
         return nullptr;
     }
-
-    cv::Mat processed = yatagami::enhanceImage(bgr, mode);
-    return yatagami::matToBitmap(env, processed);
 }
 
 JNIEXPORT jboolean JNICALL
@@ -127,20 +156,26 @@ Java_com_yatagami_opencv_ImageProcessor_nativeEnhanceImageDirect(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat bgr;
-    if (!yatagami::bitmapToMat(env, srcBitmap, bgr)) {
+    try {
+        cv::Mat bgr;
+        if (!yatagami::bitmapToMat(env, srcBitmap, bgr)) {
+            return JNI_FALSE;
+        }
+
+        cv::Mat processed = yatagami::enhanceImage(bgr, mode);
+        bool ok = yatagami::matToBitmapDirect(env, processed, dstBitmap);
+        return ok ? JNI_TRUE : JNI_FALSE;
+    } catch (...) {
         return JNI_FALSE;
     }
-
-    cv::Mat processed = yatagami::enhanceImage(bgr, mode);
-    bool ok = yatagami::matToBitmapDirect(env, processed, dstBitmap);
-    return ok ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL
 Java_com_yatagami_opencv_ImageProcessor_nativeClearBufferPool(
         JNIEnv *, jobject) {
-    yatagami::BufferPool::getInstance().clear();
+    try {
+        yatagami::BufferPool::getInstance().clear();
+    } catch (...) {}
 }
 
 JNIEXPORT jboolean JNICALL
@@ -150,32 +185,36 @@ Java_com_yatagami_opencv_ImageProcessor_nativeProcessPageFull(
 
     yatagami::pinThreadToBigCores();
 
-    cv::Mat src;
-    if (!yatagami::bitmapToMat(env, srcBitmap, src)) {
+    try {
+        cv::Mat src;
+        if (!yatagami::bitmapToMat(env, srcBitmap, src)) {
+            return JNI_FALSE;
+        }
+
+        // 1. Detect document corners with subpixel precision
+        std::vector<cv::Point2f> docCorners = yatagami::detectDocumentCorners(src);
+
+        if (outCorners != nullptr && env->GetArrayLength(outCorners) >= 8) {
+            float flat[8];
+            for (int i = 0; i < 4; ++i) {
+                flat[i * 2] = docCorners[i].x;
+                flat[i * 2 + 1] = docCorners[i].y;
+            }
+            env->SetFloatArrayRegion(outCorners, 0, 8, flat);
+        }
+
+        // 2. Warp perspective, correct orientation, and deskew text
+        cv::Mat warped = yatagami::warpAndDeskewPerspective(src, docCorners, dstWidth, dstHeight);
+
+        // 3. Apply enhancement filter (with auto glare suppression if AUTO mode)
+        cv::Mat finalEnhanced = yatagami::enhanceImage(warped, filterMode);
+
+        // 4. Zero-copy write to destination bitmap
+        bool ok = yatagami::matToBitmapDirect(env, finalEnhanced, dstBitmap);
+        return ok ? JNI_TRUE : JNI_FALSE;
+    } catch (...) {
         return JNI_FALSE;
     }
-
-    // 1. Detect document corners with subpixel precision
-    std::vector<cv::Point2f> docCorners = yatagami::detectDocumentCorners(src);
-
-    if (outCorners != nullptr && env->GetArrayLength(outCorners) >= 8) {
-        float flat[8];
-        for (int i = 0; i < 4; ++i) {
-            flat[i * 2] = docCorners[i].x;
-            flat[i * 2 + 1] = docCorners[i].y;
-        }
-        env->SetFloatArrayRegion(outCorners, 0, 8, flat);
-    }
-
-    // 2. Warp perspective, correct orientation, and deskew text
-    cv::Mat warped = yatagami::warpAndDeskewPerspective(src, docCorners, dstWidth, dstHeight);
-
-    // 3. Apply enhancement filter (with auto glare suppression if AUTO mode)
-    cv::Mat finalEnhanced = yatagami::enhanceImage(warped, filterMode);
-
-    // 4. Zero-copy write to destination bitmap
-    bool ok = yatagami::matToBitmapDirect(env, finalEnhanced, dstBitmap);
-    return ok ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jintArray JNICALL
@@ -189,22 +228,28 @@ Java_com_yatagami_opencv_ImageProcessor_nativeInferDocumentType(
         return result;
     }
 
-    jfloat *pts = env->GetFloatArrayElements(corners, nullptr);
-    std::vector<cv::Point2f> srcPts = {
-        {pts[0], pts[1]}, {pts[2], pts[3]},
-        {pts[4], pts[5]}, {pts[6], pts[7]}
-    };
-    env->ReleaseFloatArrayElements(corners, pts, 0);
+    try {
+        jfloat *pts = env->GetFloatArrayElements(corners, nullptr);
+        std::vector<cv::Point2f> srcPts = {
+            {pts[0], pts[1]}, {pts[2], pts[3]},
+            {pts[4], pts[5]}, {pts[6], pts[7]}
+        };
+        env->ReleaseFloatArrayElements(corners, pts, 0);
 
-    yatagami::DocumentTypeResult docRes = yatagami::inferDocumentTypeAndSize(srcPts);
-    jint vals[4] = {
-        static_cast<jint>(docRes.type),
-        docRes.isPortrait ? 1 : 0,
-        docRes.targetWidth,
-        docRes.targetHeight
-    };
-    env->SetIntArrayRegion(result, 0, 4, vals);
-    return result;
+        yatagami::DocumentTypeResult docRes = yatagami::inferDocumentTypeAndSize(srcPts);
+        jint vals[4] = {
+            static_cast<jint>(docRes.type),
+            docRes.isPortrait ? 1 : 0,
+            docRes.targetWidth,
+            docRes.targetHeight
+        };
+        env->SetIntArrayRegion(result, 0, 4, vals);
+        return result;
+    } catch (...) {
+        jint defaultRes[4] = {0, 1, 1240, 1754};
+        env->SetIntArrayRegion(result, 0, 4, defaultRes);
+        return result;
+    }
 }
 
 } // extern "C"

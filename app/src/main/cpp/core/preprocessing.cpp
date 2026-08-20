@@ -10,7 +10,7 @@ void applyDynamicGamma(const cv::Mat& gray, cv::Mat& dst) {
     double meanVal = std::clamp(meanScalar[0], 10.0, 245.0);
 
     double gamma = std::log(0.5) / std::log(meanVal / 255.0);
-    gamma = std::clamp(gamma, 0.4, 2.2);
+    gamma = std::clamp(gamma, 0.5, 2.0);
 
     if (std::abs(gamma - 1.0) < 0.05) {
         if (&dst != &gray) gray.copyTo(dst);
@@ -36,9 +36,9 @@ void removeShadowsGray(const cv::Mat& gray, cv::Mat& dst) {
     ScopedMat bg(gray.rows, gray.cols, CV_8UC1);
     ScopedMat diff(gray.rows, gray.cols, CV_8UC1);
 
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(21, 21));
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(15, 15));
     cv::dilate(gray, *dilated, kernel);
-    cv::medianBlur(*dilated, *bg, 21);
+    cv::medianBlur(*dilated, *bg, 15);
 
     cv::absdiff(*bg, gray, *diff);
     cv::subtract(cv::Scalar(255), *diff, dst);
@@ -52,7 +52,7 @@ cv::Mat removeShadowsGray(const cv::Mat& gray) {
 }
 
 void applyCLAHEGray(const cv::Mat& gray, cv::Mat& dst) {
-    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.5, cv::Size(8, 8));
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
     clahe->apply(gray, dst);
 }
 
@@ -63,14 +63,7 @@ cv::Mat applyCLAHEGray(const cv::Mat& gray) {
 }
 
 void applyNoiseReduction(const cv::Mat& gray, cv::Mat& dst) {
-    cv::Scalar meanVal = cv::mean(gray);
-    if (meanVal[0] < 55.0) {
-        // True low-light: invoke edge-preserving bilateral filter
-        cv::bilateralFilter(gray, dst, 5, 45, 45);
-    } else {
-        // Normal lighting: 9-in-1 pixel binning sensor provides clean signal, use fast Gaussian blur
-        cv::GaussianBlur(gray, dst, cv::Size(3, 3), 0);
-    }
+    cv::GaussianBlur(gray, dst, cv::Size(5, 5), 0);
 }
 
 cv::Mat applyNoiseReduction(const cv::Mat& gray) {
@@ -83,16 +76,11 @@ void preprocessForDetection(const cv::Mat& bgr, cv::Mat& dst) {
     ScopedMat gray(bgr.rows, bgr.cols, CV_8UC1);
     cv::cvtColor(bgr, *gray, cv::COLOR_BGR2GRAY);
 
-    ScopedMat gammaCorrected(bgr.rows, bgr.cols, CV_8UC1);
-    applyDynamicGamma(*gray, *gammaCorrected);
+    // Apply fast noise reduction followed by CLAHE contrast enhancement
+    ScopedMat blurred(bgr.rows, bgr.cols, CV_8UC1);
+    cv::GaussianBlur(*gray, *blurred, cv::Size(5, 5), 0);
 
-    ScopedMat shadowRemoved(bgr.rows, bgr.cols, CV_8UC1);
-    removeShadowsGray(*gammaCorrected, *shadowRemoved);
-
-    ScopedMat contrastEnhanced(bgr.rows, bgr.cols, CV_8UC1);
-    applyCLAHEGray(*shadowRemoved, *contrastEnhanced);
-
-    applyNoiseReduction(*contrastEnhanced, dst);
+    applyCLAHEGray(*blurred, dst);
 }
 
 cv::Mat preprocessForDetection(const cv::Mat& bgr) {

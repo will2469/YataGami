@@ -63,16 +63,24 @@ bool matToBitmapDirect(JNIEnv *env, const cv::Mat &mat, jobject dstBitmap) {
 }
 
 jobject matToBitmap(JNIEnv *env, const cv::Mat &mat) {
+    jclass configCls = env->FindClass("android/graphics/Bitmap$Config");
+    if (!configCls) return nullptr;
+    jfieldID argb8888Field = env->GetStaticFieldID(configCls, "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
+    if (!argb8888Field) return nullptr;
+    jobject config = env->GetStaticObjectField(configCls, argb8888Field);
+
     jclass bitmapCls = env->FindClass("android/graphics/Bitmap");
+    if (!bitmapCls) return nullptr;
     jmethodID createBitmap = env->GetStaticMethodID(bitmapCls, "createBitmap",
         "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
-    jfieldID argb8888 = env->GetStaticFieldID(bitmapCls, "Config_ARGB_8888",
-        "Landroid/graphics/Bitmap$Config;");
-    jobject config = env->GetStaticObjectField(bitmapCls, argb8888);
+    if (!createBitmap) return nullptr;
     jobject outBitmap = env->CallStaticObjectMethod(bitmapCls, createBitmap, mat.cols, mat.rows, config);
+    if (!outBitmap) return nullptr;
 
     void *pixels = nullptr;
-    AndroidBitmap_lockPixels(env, outBitmap, &pixels);
+    if (AndroidBitmap_lockPixels(env, outBitmap, &pixels) < 0) {
+        return nullptr;
+    }
     cv::Mat outMat(mat.rows, mat.cols, CV_8UC4, pixels);
     if (mat.channels() == 3) {
         cv::cvtColor(mat, outMat, cv::COLOR_BGR2RGBA);

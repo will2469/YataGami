@@ -14,19 +14,21 @@ class DocumentDetector {
     private val cachedFloats = FloatArray(8)
 
     suspend fun detectDocument(bitmap: Bitmap): FloatArray = withContext(Dispatchers.Default) {
-        directPointBuffer.rewind()
-        val success = nativeDetectDocumentDirect(bitmap, directPointBuffer)
-        if (success) {
+        synchronized(directPointBuffer) {
             directPointBuffer.rewind()
-            directPointBuffer.asFloatBuffer().get(cachedFloats)
-            cachedFloats.clone()
-        } else {
-            floatArrayOf(
-                0f, 0f,
-                bitmap.width.toFloat(), 0f,
-                bitmap.width.toFloat(), bitmap.height.toFloat(),
-                0f, bitmap.height.toFloat()
-            )
+            val success = nativeDetectDocumentDirect(bitmap, directPointBuffer)
+            if (success) {
+                directPointBuffer.rewind()
+                directPointBuffer.asFloatBuffer().get(cachedFloats)
+                cachedFloats.clone()
+            } else {
+                floatArrayOf(
+                    0f, 0f,
+                    bitmap.width.toFloat(), 0f,
+                    bitmap.width.toFloat(), bitmap.height.toFloat(),
+                    0f, bitmap.height.toFloat()
+                )
+            }
         }
     }
 

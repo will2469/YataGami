@@ -113,6 +113,7 @@ fun CameraPreview(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     scaleType = PreviewView.ScaleType.FILL_CENTER
+                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 }
 
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)

@@ -67,7 +67,13 @@ float calculateQuadConfidence(const std::vector<cv::Point2f>& corners, float img
     float totalArea = imgWidth * imgHeight;
     if (totalArea <= 0.0f) return 0.0f;
     float areaRatio = static_cast<float>(quadArea / totalArea);
-    float areaScore = std::clamp((areaRatio - 0.05f) / 0.85f, 0.0f, 1.0f);
+    
+    // If contour is essentially the entire frame (>95%), it is a fallback, not a detected document
+    if (areaRatio > 0.95f || areaRatio < 0.03f) {
+        return 0.0f;
+    }
+
+    float areaScore = std::clamp((areaRatio - 0.03f) / 0.85f, 0.0f, 1.0f);
 
     // 2. Parallelism (0.20 weight)
     float topLen = pointDist(q[0], q[1]);
@@ -100,7 +106,6 @@ float calculateQuadConfidence(const std::vector<cv::Point2f>& corners, float img
     float aspect = avgWidth / std::max(1.0f, avgHeight);
     float aspectScore = 0.0f;
     if (aspect >= 0.2f && aspect <= 5.0f) {
-        // High score for standard ratios: A4 (0.707 or 1.414), ID cards (0.628 or 1.586)
         aspectScore = 1.0f;
     }
 
@@ -133,38 +138,34 @@ std::vector<cv::Point2f> detectDocumentCorners(const cv::Mat& img, float* outCon
     ScopedMat preprocessed(processImg.rows, processImg.cols, CV_8UC1);
     preprocessForDetection(processImg, *preprocessed);
 
-    cv::Mat dummy;
-    double highThresh = cv::threshold(*preprocessed, dummy, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-    double lowThresh = std::max(20.0, 0.4 * highThresh);
-    highThresh = std::min(220.0, std::max(70.0, highThresh));
-
-    ScopedMat edges(processImg.rows, processImg.cols, CV_8UC1);
-    cv::Canny(*preprocessed, *edges, lowThresh, highThresh);
-
-    cv::Mat morphKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
-    cv::morphologyEx(*edges, *edges, cv::MORPH_CLOSE, morphKernel);
-
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(*edges, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
-
-    std::sort(contours.begin(), contours.end(),
-        [](const auto &a, const auto &b) {
-            return cv::contourArea(a) > cv::contourArea(b);
-        });
-
     float imgArea = static_cast<float>(processImg.rows * processImg.cols);
     std::vector<cv::Point2f> docCorners;
     bool foundQuad = false;
 
-    // Stage 1: Standard Polygon Approximation (epsilon = 0.02 * perimeter)
-    for (const auto &contour : contours) {
-        double perimeter = cv::arcLength(contour, true);
-        std::vector<cv::Point> approx;
-        cv::approxPolyDP(contour, approx, 0.02 * perimeter, true);
+    // PIPELINE 1: Multi-scale Canny Edges
+    {
+        ScopedMat edges(processImg.rows, processImg.cols, CV_8UC1);
+        cv::Canny(*preprocessed, *edges, 35, 110);
+        cv::Mat morphKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+        cv::morphologyEx(*edges, *edges, cv::MORPH_CLOSE, morphKernel);
 
-        if (approx.size() == 4 && cv::isContourConvex(approx)) {
-            float area = static_cast<float>(cv::contourArea(approx));
-            if (area > imgArea * 0.05f) {
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(*edges, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+        std::sort(contours.begin(), contours.end(),
+            [](const auto &a, const auto &b) {
+                return cv::contourArea(a) > cv::contourArea(b);
+            });
+
+        for (const auto &contour : contours) {
+            double area = cv::contourArea(contour);
+            if (area < imgArea * 0.03f || area > imgArea * 0.94f) continue;
+
+            double perimeter = cv::arcLength(contour, true);
+            std::vector<cv::Point> approx;
+            cv::approxPolyDP(contour, approx, 0.02 * perimeter, true);
+
+            if (approx.size() == 4 && cv::isContourConvex(approx)) {
                 for (const auto &p : approx) {
                     docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
                 }
@@ -174,34 +175,67 @@ std::vector<cv::Point2f> detectDocumentCorners(const cv::Mat& img, float* outCon
         }
     }
 
-    // Fallback Stage 1: Convex Hull + approxPolyDP with looser epsilon (0.04)
-    if (!foundQuad && !contours.empty() && cv::contourArea(contours[0]) > imgArea * 0.05f) {
-        std::vector<cv::Point> hull;
-        cv::convexHull(contours[0], hull);
-        double perimeter = cv::arcLength(hull, true);
-        std::vector<cv::Point> approx;
-        cv::approxPolyDP(hull, approx, 0.04 * perimeter, true);
+    // PIPELINE 2: Otsu Binary Thresholding (for high-contrast paper on tables)
+    if (!foundQuad) {
+        ScopedMat binary(processImg.rows, processImg.cols, CV_8UC1);
+        cv::threshold(*preprocessed, *binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
-        if (approx.size() == 4 && cv::isContourConvex(approx)) {
-            for (const auto &p : approx) {
-                docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(*binary, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+        std::sort(contours.begin(), contours.end(),
+            [](const auto &a, const auto &b) {
+                return cv::contourArea(a) > cv::contourArea(b);
+            });
+
+        for (const auto &contour : contours) {
+            double area = cv::contourArea(contour);
+            if (area < imgArea * 0.03f || area > imgArea * 0.94f) continue;
+
+            double perimeter = cv::arcLength(contour, true);
+            std::vector<cv::Point> approx;
+            cv::approxPolyDP(contour, approx, 0.025 * perimeter, true);
+
+            if (approx.size() == 4 && cv::isContourConvex(approx)) {
+                docCorners.clear();
+                for (const auto &p : approx) {
+                    docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
+                }
+                foundQuad = true;
+                break;
             }
-            foundQuad = true;
         }
     }
 
-    // Fallback Stage 2: Minimum Area Bounding Rectangle (minAreaRect)
-    if (!foundQuad && !contours.empty() && cv::contourArea(contours[0]) > imgArea * 0.05f) {
-        cv::RotatedRect minRect = cv::minAreaRect(contours[0]);
-        cv::Point2f rectPts[4];
-        minRect.points(rectPts);
-        for (int i = 0; i < 4; ++i) {
-            docCorners.push_back(rectPts[i]);
+    // Fallback: Convex Hull approximation on largest contour
+    if (!foundQuad) {
+        ScopedMat edges(processImg.rows, processImg.cols, CV_8UC1);
+        cv::Canny(*preprocessed, *edges, 30, 90);
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(*edges, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+        std::sort(contours.begin(), contours.end(), [](const auto &a, const auto &b) { return cv::contourArea(a) > cv::contourArea(b); });
+
+        if (!contours.empty()) {
+            double area = cv::contourArea(contours[0]);
+            if (area >= imgArea * 0.04f && area <= imgArea * 0.94f) {
+                std::vector<cv::Point> hull;
+                cv::convexHull(contours[0], hull);
+                double perimeter = cv::arcLength(hull, true);
+                std::vector<cv::Point> approx;
+                cv::approxPolyDP(hull, approx, 0.04 * perimeter, true);
+
+                if (approx.size() == 4 && cv::isContourConvex(approx)) {
+                    docCorners.clear();
+                    for (const auto &p : approx) {
+                        docCorners.emplace_back(static_cast<float>(p.x), static_cast<float>(p.y));
+                    }
+                    foundQuad = true;
+                }
+            }
         }
-        foundQuad = true;
     }
 
-    // Fallback Stage 3: Full Image Quadrilateral
+    // Fallback: Full Image Quadrilateral with 0 Confidence
     if (!foundQuad || docCorners.size() != 4) {
         docCorners = {
             {0.0f, 0.0f},
@@ -209,21 +243,37 @@ std::vector<cv::Point2f> detectDocumentCorners(const cv::Mat& img, float* outCon
             {static_cast<float>(processImg.cols - 1), static_cast<float>(processImg.rows - 1)},
             {0.0f, static_cast<float>(processImg.rows - 1)}
         };
-    }
+        if (outConfidence) {
+            *outConfidence = 0.0f;
+        }
+    } else {
+        docCorners = orderQuadCorners(docCorners);
+        float confidence = calculateQuadConfidence(docCorners, processImg.cols, processImg.rows);
+        if (outConfidence) {
+            *outConfidence = confidence;
+        }
 
-    docCorners = orderQuadCorners(docCorners);
-    float confidence = calculateQuadConfidence(docCorners, processImg.cols, processImg.rows);
+        // Subpixel refinement with small window (5x5) if confidence is high
+        if (confidence > 0.60f) {
+            bool allInside = true;
+            int margin = 6;
+            for (const auto& pt : docCorners) {
+                if (pt.x < margin || pt.x >= processImg.cols - margin ||
+                    pt.y < margin || pt.y >= processImg.rows - margin) {
+                    allInside = false;
+                    break;
+                }
+            }
 
-    if (outConfidence) {
-        *outConfidence = confidence;
-    }
-
-    // Subpixel refinement with small window (5x5, maxIter=10, eps=0.01) if confidence is reliable
-    if (confidence > 0.60f && foundQuad) {
-        ScopedMat grayProcess(processImg.rows, processImg.cols, CV_8UC1);
-        cv::cvtColor(processImg, *grayProcess, cv::COLOR_BGR2GRAY);
-        cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 10, 0.01);
-        cv::cornerSubPix(*grayProcess, docCorners, cv::Size(5, 5), cv::Size(-1, -1), criteria);
+            if (allInside) {
+                try {
+                    ScopedMat grayProcess(processImg.rows, processImg.cols, CV_8UC1);
+                    cv::cvtColor(processImg, *grayProcess, cv::COLOR_BGR2GRAY);
+                    cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 10, 0.01);
+                    cv::cornerSubPix(*grayProcess, docCorners, cv::Size(5, 5), cv::Size(-1, -1), criteria);
+                } catch (...) {}
+            }
+        }
     }
 
     for (auto &pt : docCorners) {
